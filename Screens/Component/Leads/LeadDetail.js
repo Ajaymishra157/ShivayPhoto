@@ -2,7 +2,9 @@ import React, { useEffect, useState, useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, ActivityIndicator,
     TouchableOpacity, Image, SafeAreaView, StatusBar,
-    Modal, TextInput, FlatList
+    Modal, TextInput, FlatList,
+    Linking,
+    Alert
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { API, Colors, Fonts } from '../Commoncomponent/Constants';
@@ -125,10 +127,16 @@ const PickerModal = React.memo(({ visible, onClose, title, data, selected, onSel
    INFO ROW
 ───────────────────────────────────────────── */
 const InfoRow = ({ icon, label, value }) => (
-    <View style={styles.infoRow}>
-        <Icon name={icon} size={16} color="#7367f0" style={styles.infoIcon} />
-        <Text style={styles.infoLabel}>{label}:</Text>
-        <Text style={styles.infoValue} numberOfLines={2}>{value || '--'}</Text>
+    <View style={styles.infoItem}>
+        <View style={styles.infoRow}>
+            <Icon name={icon} size={16} color="#7367f0" style={styles.infoIcon} />
+            <Text style={styles.infoLabel} numberOfLines={1}>
+                {label}
+            </Text>
+        </View>
+        <Text style={styles.infoValue} numberOfLines={2}>
+            {value || '--'}
+        </Text>
     </View>
 );
 
@@ -151,12 +159,12 @@ const TimelineItem = ({ entry, isLast }) => {
                     <Text style={styles.timelineDateRight}>{formatDateTime(entry.created_at || entry.date)}</Text>
                 </View>
                 {!!entry.notes && <Text style={styles.timelineNote}>{entry.notes}</Text>}
-                {!!entry.date && (
-                    <View style={styles.timelineDateBadge}>
-                        <Icon name="calendar-outline" size={12} color="#7367f0" />
-                        <Text style={styles.timelineDateBadgeTxt}>{formatDate(entry.date)}</Text>
-                    </View>
-                )}
+
+                <View style={styles.timelineDateBadge}>
+                    <Icon name="calendar-outline" size={12} color="#73717d" />
+                    <Text style={styles.timelineDateBadgeTxt}>{formatDate(entry.time)}</Text>
+                </View>
+
             </View>
         </View>
     );
@@ -187,6 +195,52 @@ const LeadDetail = ({ route, navigation }) => {
     const [errors, setErrors] = useState({});   // ✅ validation errors
 
     useEffect(() => { fetchDetail(); }, [enquiry_id]);
+
+    const handleCall = (phone) => {
+        if (!phone) return;
+        Linking.openURL(`tel:${phone}`);
+    };
+
+
+    const handleWhatsApp = async (phone) => {
+        if (!phone) {
+            Alert.alert('Error', 'Phone number not available');
+            return;
+        }
+
+        // Remove all non-numeric characters
+        let formattedPhone = phone.replace(/\D/g, '');
+
+        // Add India country code if missing
+        if (formattedPhone.length == 10) {
+            formattedPhone = `91${formattedPhone}`;
+        }
+
+        const message = 'Hello, I am contacting you regarding your inquiry.';
+        const encodedMessage = encodeURIComponent(message);
+
+        // WhatsApp deep link
+        const whatsappUrl = `whatsapp://send?phone=${formattedPhone}&text=${encodedMessage}`;
+        const fallbackUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
+
+        try {
+            const supported = await Linking.canOpenURL(whatsappUrl);
+
+            if (supported) {
+                await Linking.openURL(whatsappUrl);
+            } else {
+                await Linking.openURL(fallbackUrl);
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Unable to open WhatsApp');
+            console.log('WhatsApp Error:', error);
+        }
+    };
+
+    const handleEmail = (email) => {
+        if (!email) return;
+        Linking.openURL(`mailto:${email}`);
+    };
 
     const fetchDetail = async () => {
         setLoading(true); setError(null);
@@ -314,27 +368,40 @@ const LeadDetail = ({ route, navigation }) => {
                         <Text style={styles.heroName} numberOfLines={1}>
                             {lead.name || lead.full_name || '--'}
                         </Text>
+
+                        {/* ✅ Single Line: Phone | City | Date */}
                         <View style={styles.heroMetaRow}>
                             <Icon name="phone-outline" size={13} color="#ffffffcc" />
-                            <Text style={styles.heroMetaTxt}>{lead.mobile || '--'}</Text>
-                        </View>
-                        <View style={styles.heroMetaRow}>
+                            <Text style={styles.heroMetaTxt}>
+                                {lead.mobile || '--'}
+                            </Text>
+
+                            <Text style={styles.separator}>•</Text>
+
                             <Icon name="map-marker-outline" size={13} color="#ffffffcc" />
-                            <Text style={styles.heroMetaTxt}>{lead.city_name || lead.city || '--'}</Text>
-                        </View>
-                        <View style={styles.heroMetaRow}>
+                            <Text style={styles.heroMetaTxt}>
+                                {lead.city_name || lead.city || '--'}
+                            </Text>
+
+                            <Text style={styles.separator}>•</Text>
+
                             <Icon name="calendar-plus" size={13} color="#ffffffcc" />
-                            <Text style={styles.heroMetaTxt}>Added {formatDate(lead.created_at)}</Text>
+                            <Text style={styles.heroMetaTxt}>
+                                {formatDate(lead.created_at)}
+                            </Text>
                         </View>
 
-                        {/* ✅ Status badge — inside flow, no absolute, won't overflow */}
+                        {/* ✅ Status Badge */}
                         <TouchableOpacity
                             onPress={() => setStatusModalVisible(true)}
                             activeOpacity={0.8}
                             style={[styles.heroBadge, { backgroundColor: statusSt.bg }]}
                         >
                             <Icon name="circle-slice-8" size={10} color={statusSt.text} />
-                            <Text style={[styles.heroBadgeTxt, { color: statusSt.text }]} numberOfLines={1}>
+                            <Text
+                                style={[styles.heroBadgeTxt, { color: statusSt.text }]}
+                                numberOfLines={1}
+                            >
                                 {latestStatus}
                             </Text>
                         </TouchableOpacity>
@@ -343,49 +410,127 @@ const LeadDetail = ({ route, navigation }) => {
 
                 {/* ── ABOUT CARD ── */}
                 <View style={styles.card}>
+                    {/* Header */}
                     <View style={styles.cardHeader}>
-                        <Icon name="account-details-outline" size={18} color="#7367f0" />
+                        <Icon
+                            name="account-details-outline"
+                            size={18}
+                            color="#7367f0"
+                            style={styles.headerIcon}
+                        />
                         <Text style={styles.cardTitle}>About</Text>
                     </View>
-                    <InfoRow icon="account-outline" label="Full Name" value={lead.name || lead.full_name} />
-                    <InfoRow icon="home-outline" label="Address" value={lead.address} />
-                    <InfoRow icon="map-outline" label="State" value={[lead.state_name || '---'].filter(Boolean).join(', ')} />
-                    <InfoRow icon="city-variant-outline" label="City" value={[lead.city_name || lead.city].filter(Boolean).join(', ')} />
-                    <InfoRow icon="account-arrow-right" label="Source" value={lead.source} />
-                    <InfoRow icon="tag-outline" label="Purpose" value={lead.purpose} />
-                    <InfoRow icon="map-marker-distance" label="Destination" value={lead.destination} />
-                    <InfoRow icon="calendar-star" label="Event Date 1" value={formatDate(lead.event_date)} />
-                    <InfoRow icon="calendar-star-outline" label="Event Date 2" value={formatDate(lead.event_date2)} />
-                    <InfoRow icon="fire" label="Lead Type" value={lead.lead_type} />
-                    <InfoRow icon="comment-text-outline" label="Remark" value={lead.remark} />
+
+                    {/* Divider Below Header */}
+                    <View style={styles.headerDivider} />
+
+                    {/* Info Rows */}
+                    <View style={styles.infoGrid}>
+                        {/* Row 1 */}
+                        <View style={styles.infoPair}>
+                            <InfoRow icon="account-outline" label="Full Name" value={lead.name || lead.full_name} />
+                            <InfoRow icon="home-outline" label="Address" value={lead.address} />
+                        </View>
+                        <View style={styles.rowDivider} />
+
+                        {/* Row 2 */}
+                        <View style={styles.infoPair}>
+                            <InfoRow icon="map-outline" label="State" value={lead.state_name} />
+                            <InfoRow icon="city-variant-outline" label="City" value={lead.city_name || lead.city} />
+                        </View>
+                        <View style={styles.rowDivider} />
+
+                        {/* Row 3 */}
+                        <View style={styles.infoPair}>
+                            <InfoRow icon="account-arrow-right" label="Source" value={lead.source} />
+                            <InfoRow icon="tag-outline" label="Purpose" value={lead.purpose} />
+                        </View>
+                        <View style={styles.rowDivider} />
+
+                        {/* Row 4 */}
+                        <View style={styles.infoPair}>
+                            <InfoRow icon="map-marker-distance" label="Destination" value={lead.destination} />
+                            <InfoRow icon="calendar-star" label="Event Date 1" value={formatDate(lead.event_date)} />
+                        </View>
+                        <View style={styles.rowDivider} />
+
+                        {/* Row 5 */}
+                        <View style={styles.infoPair}>
+                            <InfoRow icon="calendar-star" label="Event Date 2" value={formatDate(lead.event_date2)} />
+                            <InfoRow icon="fire" label="Lead Type" value={lead.lead_type} />
+                        </View>
+                        <View style={styles.rowDivider} />
+
+                        {/* Row 6 */}
+                        <View style={styles.infoPair}>
+                            <InfoRow icon="comment-text-outline" label="Remark" value={lead.remark} />
+                            <View style={{ width: '48%' }} />
+                        </View>
+                    </View>
                 </View>
 
+                {/* ── CONTACTS CARD ── */}
                 {/* ── CONTACTS CARD ── */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <Icon name="contacts-outline" size={18} color="#7367f0" />
                         <Text style={styles.cardTitle}>Contacts</Text>
                     </View>
+
+                    {/* 📞 Contact Number with Call & WhatsApp */}
                     <View style={styles.contactRow}>
                         <View style={styles.contactIconWrap}>
                             <Icon name="phone" size={16} color="#7367f0" />
                         </View>
-                        <View>
+
+                        <View style={{ flex: 1 }}>
                             <Text style={styles.contactLbl}>Contact</Text>
                             <Text style={styles.contactVal}>{lead.mobile || '--'}</Text>
                         </View>
+
+                        {lead.mobile && (
+                            <View style={styles.contactActions}>
+                                {/* WhatsApp */}
+                                <TouchableOpacity
+                                    style={[styles.actionBtn, { backgroundColor: '#E8F5E9' }]}
+                                    onPress={() => handleWhatsApp(lead.mobile)}
+                                >
+                                    <Icon name="whatsapp" size={18} color="#25D366" />
+                                </TouchableOpacity>
+
+                                {/* Call */}
+                                <TouchableOpacity
+                                    style={[styles.actionBtn, { backgroundColor: '#E3F2FD' }]}
+                                    onPress={() => handleCall(lead.mobile)}
+                                >
+                                    <Icon name="phone" size={18} color="#2196F3" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
-                    {!!lead.email && (
-                        <View style={[styles.contactRow, { marginTop: 12 }]}>
-                            <View style={styles.contactIconWrap}>
-                                <Icon name="email-outline" size={16} color="#7367f0" />
-                            </View>
-                            <View>
-                                <Text style={styles.contactLbl}>Email</Text>
-                                <Text style={styles.contactVal}>{lead.email}</Text>
-                            </View>
+
+                    {/* 📧 Email Block (Retained) */}
+                    <View style={[styles.contactRow, { marginTop: 12 }]}>
+                        <View style={styles.contactIconWrap}>
+                            <Icon name="email-outline" size={16} color="#7367f0" />
                         </View>
-                    )}
+
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.contactLbl}>Email</Text>
+                            <Text style={styles.contactVal}>
+                                {lead.email || '---'}
+                            </Text>
+                        </View>
+
+                        {lead.email ? (
+                            <TouchableOpacity
+                                style={[styles.actionBtn, { backgroundColor: '#FFF4E5' }]}
+                                onPress={() => handleEmail(lead.email)}
+                            >
+                                <Icon name="email" size={18} color="#FF9800" />
+                            </TouchableOpacity>
+                        ) : null}
+                    </View>
                 </View>
 
                 {/* ── ACTIVITY TIMELINE CARD ── */}
@@ -592,37 +737,154 @@ const styles = StyleSheet.create({
     avatarFallback: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
     avatarInitial: { color: '#fff', fontSize: 26, fontWeight: '800' },
 
-    heroInfo: { flex: 1 },   // ✅ takes remaining space, badge stays inside
-    heroName: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 6 },
-    heroMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 },
-    heroMetaTxt: { color: '#ffffffcc', fontSize: 12 },
-
-    /* ✅ Badge is in normal flow — not absolute, won't go over name */
-    heroBadge: {
-        flexDirection: 'row', alignItems: 'center', gap: 5,
-        paddingHorizontal: 10, paddingVertical: 5,
-        borderRadius: 20, alignSelf: 'flex-start', marginTop: 8,
+    heroInfo: {
+        flex: 1,
     },
-    heroBadgeTxt: { fontSize: 11, fontWeight: '700', flexShrink: 1 },
+
+    heroName: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '800',
+        marginBottom: 6,
+    },
+
+    heroMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap', // Prevents overflow on small screens
+    },
+
+    heroMetaTxt: {
+        color: '#ffffffcc',
+        fontSize: 12,
+        marginRight: 4,
+    },
+
+    separator: {
+        color: '#ffffffcc',
+        fontSize: 12,
+        marginHorizontal: 6,
+    },
+
+    heroBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+        alignSelf: 'flex-start',
+        marginTop: 8,
+    },
+
+    heroBadgeTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        flexShrink: 1,
+    },
+
 
     card: {
-        backgroundColor: '#fff', borderRadius: 14,
-        marginHorizontal: 14, marginTop: 16, padding: 16,
-        shadowColor: '#7367f0', shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
+        backgroundColor: '#fff',
+        borderRadius: 14,
+        marginHorizontal: 14,
+        marginTop: 16,
+        padding: 16,
+        shadowColor: '#7367f0',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 3,
     },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-    cardTitle: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
 
-    infoRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
-    infoIcon: { marginRight: 8, marginTop: 1 },
-    infoLabel: { fontSize: 13, color: '#64748b', fontWeight: '600', width: 96 },
-    infoValue: { fontSize: 13, color: '#1e293b', flex: 1 },
+    /* Header */
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        marginBottom: 10,
+    },
 
+    headerIcon: {
+        position: 'absolute',
+        left: 0, // Keeps title perfectly centered
+    },
+
+    cardTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#1e293b',
+        textAlign: 'center',
+    },
+
+    /* Dividers */
+    headerDivider: {
+        height: 1,
+        backgroundColor: '#e5e7eb',
+        marginBottom: 12,
+    },
+
+    rowDivider: {
+        height: 1,
+        backgroundColor: '#f1f5f9',
+        marginVertical: 8,
+    },
+
+    /* Grid Layout */
+    infoGrid: {
+        width: '100%',
+    },
+
+    infoPair: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+
+    infoItem: {
+        width: '48%',
+        paddingVertical: 4,
+    },
+
+    infoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 2,
+    },
+
+    infoIcon: {
+        marginRight: 6,
+    },
+
+    infoLabel: {
+        fontSize: 12,
+        color: '#64748b',
+        fontWeight: '600',
+    },
+
+    infoValue: {
+        fontSize: 13,
+        paddingLeft: 22,
+        color: '#1e293b',
+        fontWeight: '500',
+    },
     contactRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     contactIconWrap: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#ede9fe', alignItems: 'center', justifyContent: 'center' },
     contactLbl: { fontSize: 11, color: '#94a3b8' },
     contactVal: { fontSize: 14, color: '#1e293b', fontWeight: '600' },
+    contactActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+
+    actionBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 
     statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, alignSelf: 'flex-start' },
     statusBadgeTxt: { fontSize: 11, fontWeight: '700' },
@@ -637,11 +899,11 @@ const styles = StyleSheet.create({
     timelineNote: { fontSize: 13, color: '#475569', marginTop: 4 },
     timelineDateBadge: {
         flexDirection: 'row', alignItems: 'center', gap: 4,
-        marginTop: 6, backgroundColor: '#ede9fe',
+        marginTop: 6, backgroundColor: '#f3f2f3',
         paddingHorizontal: 8, paddingVertical: 3,
         borderRadius: 12, alignSelf: 'flex-start',
     },
-    timelineDateBadgeTxt: { fontSize: 11, color: PURPLE, fontWeight: '600' },
+    timelineDateBadgeTxt: { fontSize: 11, color: '#73717d', fontFamily: 'Inter-Regular' },
     emptyTimeline: { alignItems: 'center', paddingVertical: 24, gap: 8 },
     emptyTimelineTxt: { color: '#94a3b8', fontSize: 13 },
 });

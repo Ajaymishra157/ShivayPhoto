@@ -458,7 +458,9 @@ const TableRow = React.memo(({ item, index, isDeleting, onEye, onDot, navigation
 /* ─────────────────────────────────────────────
    MAIN SCREEN
 ───────────────────────────────────────────── */
-const ManageLeads = ({ navigation }) => {
+const ManageLeads = ({ navigation, route }) => {
+
+    const dashboardFilter = route?.params?.dashboardFilter || null;
 
     /* Staff */
     const [users, setUsers] = useState([]);
@@ -544,6 +546,32 @@ const ManageLeads = ({ navigation }) => {
     //     }, [fetchLeads])
     // );
 
+
+    // ManageLeads component ke andar, dashboardFilter ke baad add karo
+    const headerTitle = useMemo(() => {
+        if (!dashboardFilter) return 'All Leads';
+        const { follow_status, type, status } = dashboardFilter;
+        if (follow_status === 'todays_follow') {
+            if (type === 'hot') return 'Hot Leads';
+            if (type === 'warm') return 'Warm Leads';
+            if (type === 'cold') return 'Cold Leads';
+            return 'Today Follow Up';
+        }
+        if (status?.length) {
+            const map = {
+                'Pending': 'Pending Leads',
+                'Unresponsive': 'Unresponsive Leads',
+                'Follow-up': 'Follow up Leads',
+                'Quotation Sent': 'Quotation Sent Leads',
+                'Converted to Client': 'Converted to Client Leads',
+                'End': 'End Leads',
+                '': 'All Leads',
+            };
+            return map[status[0]] ?? 'All Leads';
+        }
+        return 'All Leads';
+    }, [dashboardFilter]);
+
     const handleMenuPress = (event) => {
         event.target.measureInWindow((x, y, width, height) => {
             setMenuPosition({
@@ -588,12 +616,12 @@ const ManageLeads = ({ navigation }) => {
         }
     };
 
+    // useFocusEffect mein dashboardFilter handle karo
     useFocusEffect(
         useCallback(() => {
             fetchUserType();
-        }, [])
+        }, [route?.params?.dashboardFilter]) // ← dependency add karo taki re-fetch ho
     );
-
 
 
     /* ── API ── */
@@ -617,18 +645,30 @@ const ManageLeads = ({ navigation }) => {
             id: type === 'Sales-Person' ? loginId : (userId || '')
         };
         console.log('Initial body:', body);
-        const dr = fmt(filters.dateStart, filters.dateEnd);
-        if (dr) body.date = dr;
-        if (filters.name) body.name = filters.name;
-        if (filters.mobile) body.mobile = filters.mobile;
-        if (filters.source) body.source = filters.source;
-        if (filters.purpose) body.purpose = filters.purpose;
-        if (filters.status) body.status = filters.status;
-        if (filters.city) body.city = filters.city;
-        const e1 = fmt(filters.event1Start, filters.event1End);
-        if (e1) body.function_date = e1;
-        const e2 = fmt(filters.event2Start, filters.event2End);
-        if (e2) body.function_datetwo = e2;
+        if (dashboardFilter) {
+            if (dashboardFilter.follow_status) {
+                body.follow_status = dashboardFilter.follow_status;
+            }
+            if (dashboardFilter.type) {
+                body.type = dashboardFilter.type;
+            }
+            if (dashboardFilter.status && dashboardFilter.status.length > 0) {
+                body.status = dashboardFilter.status;
+            }
+        } else {
+            const dr = fmt(filters.dateStart, filters.dateEnd);
+            if (dr) body.date = dr;
+            if (filters.name) body.name = filters.name;
+            if (filters.mobile) body.mobile = filters.mobile;
+            if (filters.source) body.source = filters.source;
+            if (filters.purpose) body.purpose = filters.purpose;
+            if (filters.status) body.status = filters.status;
+            if (filters.city) body.city = filters.city;
+            const e1 = fmt(filters.event1Start, filters.event1End);
+            if (e1) body.function_date = e1;
+            const e2 = fmt(filters.event2Start, filters.event2End);
+            if (e2) body.function_datetwo = e2;
+        }
         return body;
     }, []);
 
@@ -895,6 +935,33 @@ const ManageLeads = ({ navigation }) => {
         }
     }, [fetchAllLeadsForPdf]);
 
+    // ManageLeads mein ye function add karo (generateLeadsExcel ke baad)
+    // const downloadSampleFile = useCallback(async () => {
+    //     setMenuVisible(false);
+    //     try {
+    //         // Sample file ka base64 — yahan apni actual base64 string paste karo
+    //         // Generate karne ka tarika niche diya hai
+    //         const sampleBase64 = 'YOUR_BASE64_STRING_HERE'; // 👈 niche se replace karo
+
+    //         const fileName = 'sample_leads_import.xlsx';
+    //         const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+
+    //         await RNFS.writeFile(filePath, sampleBase64, 'base64');
+
+    //         Toast.show({
+    //             type: 'success',
+    //             text1: '✅ Sample File Downloaded!',
+    //             text2: `Saved: ${fileName}`,
+    //             position: 'bottom',
+    //             bottomOffset: 60,
+    //             visibilityTime: 3000,
+    //         });
+    //     } catch (e) {
+    //         console.log('Sample download error:', e);
+    //         Toast.show({ type: 'error', text1: 'Download failed', position: 'bottom', bottomOffset: 60 });
+    //     }
+    // }, []);
+
     /* ── ROW CALLBACKS (stable refs so TableRow memo works) ── */
     const handleEye = useCallback(item => {
         setSelectedLead(item); setStatusModalVisible(true);
@@ -954,11 +1021,14 @@ const ManageLeads = ({ navigation }) => {
                     <TouchableOpacity onPress={() => navigation.goBack()}>
                         <Icon name="arrow-left" size={24} color="#fff" />
                     </TouchableOpacity>
-                    <Text style={s.headerTitle}>All Leads</Text>
+                    <Text style={s.headerTitle}>{headerTitle}</Text>
 
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <TouchableOpacity onPress={() => setFilterModal(true)} disabled={!hasLeads}
-                            style={[s.filterIconWrap, !hasLeads && { opacity: 0.4 }]}>
+                        <TouchableOpacity
+                            onPress={() => setFilterModal(true)}
+                            disabled={!hasLeads || !!dashboardFilter}
+                            style={[s.filterIconWrap, (!hasLeads || !!dashboardFilter) && { opacity: 0.4 }]}
+                        >
                             <Icon name="tune-variant" size={22} color="#fff" />
                             {activeFilterCount > 0 && (
                                 <View style={s.filterBadge}>
@@ -1146,6 +1216,14 @@ const ManageLeads = ({ navigation }) => {
                                 paddingVertical: 6
                             }}
                         >
+
+                            {/* <TouchableOpacity
+                                onPress={downloadSampleFile}
+                                style={menuS.item}
+                            >
+                                <Icon name="file-download-outline" size={18} color="#0284c7" />
+                                <Text style={[menuS.text, { color: '#0284c7' }]}>Sample File</Text>
+                            </TouchableOpacity> */}
                             {/* ✅ YE NAYA BUTTON ADD KARO */}
                             <TouchableOpacity
                                 onPress={generateLeadsExcel}

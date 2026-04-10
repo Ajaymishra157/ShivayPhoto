@@ -26,8 +26,8 @@ const Colors = {
   inputtextbgc: '#fff',
 };
 
-const BASE_URL = 'https://crm.shivayphoto.com/dev/api/';
-// const BASE_URL = 'https://crm.shivayphoto.com/api/';
+// const BASE_URL = 'https://crm.shivayphoto.com/dev/api/';
+const BASE_URL = 'https://crm.shivayphoto.com/api/';
 
 const API = {
   BASE_URL,
@@ -99,6 +99,11 @@ const API = {
 
   state_list: `${BASE_URL}list_state.php`,
   city_list: `${BASE_URL}list_city.php`,
+
+  // Dashboard
+  counting: `${BASE_URL}dashboard/counting.php`,
+  followup_api: `${BASE_URL}dashboard/followup_api.php`,
+
 
 
 
