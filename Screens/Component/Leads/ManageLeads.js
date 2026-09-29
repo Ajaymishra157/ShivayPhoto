@@ -108,6 +108,15 @@ const PickerModal = React.memo(({ visible, onClose, title, data, selected, onSel
             <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
                 <View style={s.modalCard} onStartShouldSetResponder={() => true}>
                     <Text style={s.modalTitle}>{title}</Text>
+                    <TouchableOpacity style={{
+                        position: 'absolute',
+                        top: 10,
+                        right: 10,
+                        zIndex: 10,
+                        padding: 6,
+                    }} onPress={onClose}>
+                        <Icon name="close" size={20} color="#64748b" />
+                    </TouchableOpacity>
                     {searchEnabled && (
                         <View style={s.searchRow}>
                             <Icon name="magnify" size={18} color="#94a3b8" />
@@ -344,12 +353,12 @@ const StatusHistoryModal = ({ visible, onClose, item }) => {
                                             </View>
                                             <Text style={sm.historyDate}>{formatDateTime(entry.created_at || entry.date)}</Text>
                                         </View>
-                                        {!!entry.notes && <Text style={sm.historyNote}>{entry.notes}</Text>}
-                                        {!!entry.date && (
-                                            <View style={sm.historyDateBadge}>
-                                                <Text style={sm.historyDateBadgeTxt}>{formatDate(entry.date)}</Text>
-                                            </View>
-                                        )}
+                                        {!!entry.notes && <Text style={sm.historyNote}>{entry.notes || '---'}</Text>}
+                                        {/* {!!entry.date && ( */}
+                                        <View style={sm.historyDateBadge}>
+                                            <Text style={sm.historyDateBadgeTxt}>{formatDate(entry.time)}</Text>
+                                        </View>
+                                        {/* )} */}
                                     </View>
                                 </View>
                             );
@@ -1024,10 +1033,22 @@ const ManageLeads = ({ navigation, route }) => {
                     <Text style={s.headerTitle}>{headerTitle}</Text>
 
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <TouchableOpacity
+                        {/* <TouchableOpacity
                             onPress={() => setFilterModal(true)}
                             disabled={!hasLeads || !!dashboardFilter}
                             style={[s.filterIconWrap, (!hasLeads || !!dashboardFilter) && { opacity: 0.4 }]}
+                        >
+                            <Icon name="tune-variant" size={22} color="#fff" />
+                            {activeFilterCount > 0 && (
+                                <View style={s.filterBadge}>
+                                    <Text style={s.filterBadgeTxt}>{activeFilterCount}</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity> */}
+                        <TouchableOpacity
+                            onPress={() => setFilterModal(true)}
+                            disabled={!hasLeads}
+                            style={[s.filterIconWrap, (!hasLeads) && { opacity: 0.4 }]}
                         >
                             <Icon name="tune-variant" size={22} color="#fff" />
                             {activeFilterCount > 0 && (
@@ -1094,6 +1115,15 @@ const ManageLeads = ({ navigation, route }) => {
                     <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setStaffModal(false)}>
                         <View style={s.modalCard} onStartShouldSetResponder={() => true}>
                             <Text style={s.modalTitle}>Select Staff</Text>
+                            <TouchableOpacity style={{
+                                position: 'absolute',
+                                top: 10,
+                                right: 10,
+                                zIndex: 10,
+                                padding: 6,
+                            }} onPress={() => setStaffModal(false)}>
+                                <Icon name="close" size={20} color="#64748b" />
+                            </TouchableOpacity>
                             <View style={s.searchRow}>
                                 <Icon name="magnify" size={18} color="#94a3b8" />
                                 <TextInput value={staffSearch} onChangeText={handleStaffSearch}
@@ -1175,7 +1205,7 @@ const ManageLeads = ({ navigation, route }) => {
                                 <View style={{ marginTop: 12 }}>
                                     <Text style={s.filterLabel}>City</Text>
                                     <TouchableOpacity style={s.filterDropdown} onPress={() => setCityModal(true)}>
-                                        <Text style={[s.filterDropdownTxt, !fCity && { color: '#999' }]}>{fCity?.city_name || 'Select City'}</Text>
+                                        <Text style={[s.filterDropdownTxt, !fCity && { color: '#999' }]}>{fCity?.city_name || 'Select Branch'}</Text>
                                         <Icon name="chevron-down" size={18} color="#94a3b8" />
                                     </TouchableOpacity>
                                 </View>
@@ -1279,7 +1309,7 @@ const ManageLeads = ({ navigation, route }) => {
                 <PickerModal visible={sourceModal} onClose={() => setSourceModal(false)} title="Select Source" data={sources} selected={fSource?.source_id} onSelect={setFSource} keyField="source_id" labelField="source_name" />
                 <PickerModal visible={purposeModal} onClose={() => setPurposeModal(false)} title="Select Purpose" data={purposes} selected={fPurpose?.purpose_id} onSelect={setFPurpose} keyField="purpose_id" labelField="purpose_name" />
                 <PickerModal visible={statusPickerVisible} onClose={() => setStatusPickerVisible(false)} title="Select Status" data={STATUS_OPTIONS} selected={fStatus?.value} onSelect={setFStatus} keyField="value" labelField="label" searchEnabled={false} />
-                <PickerModal visible={cityModal} onClose={() => setCityModal(false)} title="Select City" data={cities} selected={fCity?.city_id} onSelect={setFCity} keyField="city_id" labelField="city_name" />
+                <PickerModal visible={cityModal} onClose={() => setCityModal(false)} title="Select Branch" data={cities} selected={fCity?.city_id} onSelect={setFCity} keyField="city_id" labelField="city_name" />
 
                 {/* ── DELETE CONFIRM MODAL ── */}
                 <Modal visible={deleteModal} transparent animationType="fade">

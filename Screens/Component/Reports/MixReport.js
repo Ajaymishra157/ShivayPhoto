@@ -474,6 +474,15 @@ const MixReport = ({ navigation }) => {
                         }}>
                             Select Staff
                         </Text>
+                        <TouchableOpacity style={{
+                            position: 'absolute',
+                            top: 10,
+                            right: 10,
+                            zIndex: 10,
+                            padding: 6,
+                        }} onPress={() => setStaffModal(false)}>
+                            <Icon name="close" size={20} color="#64748b" />
+                        </TouchableOpacity>
 
                         {/* Search */}
                         <View style={{

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, FlatList, TextInput, TouchableOpacity,
     SafeAreaView, StatusBar, RefreshControl, Modal,
@@ -9,6 +9,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { API, Colors, Fonts } from '../Commoncomponent/Constants';
 import SourceListShimmer from '../Shimmer/Source/SourceListShimmer';
+
+const PAGE_SIZE = 20;
 
 const formatDateTime = (dateString) => {
     if (!dateString) return '--';
@@ -38,6 +40,16 @@ const SourceList = ({ navigation }) => {
 
     const [loadingId, setLoadingId] = useState(null);
     const [isFirstSourceDone, setIsFirstSourceDone] = useState(false);
+
+    const [page, setPage] = useState(1);
+    const [loadingMore, setLoadingMore] = useState(false);
+
+
+    const visibleData = filtered.slice(0, page * PAGE_SIZE);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, data]);
 
 
 
@@ -88,6 +100,18 @@ const SourceList = ({ navigation }) => {
         );
     };
 
+
+    const handleLoadMore = () => {
+        if (loadingMore) return;
+        if (visibleData.length >= filtered.length) return;
+
+        setLoadingMore(true);
+        setTimeout(() => {
+            setPage(prev => prev + 1);
+            setLoadingMore(false);
+        }, 400);
+    };
+
     // ✅ STATUS TOGGLE (FIXED)
     const handleToggle = async (item) => {
         const newStatus =
@@ -130,7 +154,7 @@ const SourceList = ({ navigation }) => {
     };
     const handleDelete = async () => {
         try {
-            await fetch(API.delete_source, {
+            const response = await fetch(API.delete_source, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -138,10 +162,33 @@ const SourceList = ({ navigation }) => {
                 })
             });
 
-            fetchSources();
+            const json = await response.json();
+
+            // Source already used in leads/bookings
+            if (json.code === 409) {
+                setDeleteModal(false);
+
+                setSelectedItem({
+                    ...selectedItem,
+                    deleteMessage: json.message,
+                    usedCount: json.used_count,
+                });
+
+                setDeleteModal(true);
+                return;
+            }
+
+            // Successfully deleted
+            if (json.code === 200 || json.status === true) {
+                setDeleteModal(false);
+                fetchSources();
+                return;
+            }
+
+            console.log('Delete response:', json);
 
         } catch (e) {
-            console.log(e);
+            console.log('Delete error:', e);
         }
     };
 
@@ -337,7 +384,7 @@ const SourceList = ({ navigation }) => {
                 <SourceListShimmer />
             ) : (
                 <FlatList
-                    data={filtered}
+                    data={visibleData}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.source_id}
                     contentContainerStyle={{ paddingBottom: 100, paddingTop: 4, paddingHorizontal: 12 }}
@@ -345,6 +392,15 @@ const SourceList = ({ navigation }) => {
                     keyboardShouldPersistTaps='handled'
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.buttonbgcolor]} />
+                    }
+                    onEndReachedThreshold={0.4}          // ⬅ NEW
+                    onEndReached={handleLoadMore}         // ⬅ NEW
+                    ListFooterComponent={                 // ⬅ NEW
+                        loadingMore ? (
+                            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color={Colors.buttonbgcolor} />
+                            </View>
+                        ) : null
                     }
                     ListEmptyComponent={
                         <View style={{ alignItems: 'center', marginTop: 220 }}>
@@ -464,16 +520,40 @@ const SourceList = ({ navigation }) => {
                             fontFamily: Fonts.Regular,
                             color: '#64748b',
                             textAlign: 'center',
-                            marginBottom: 20
+                            marginBottom: 10
                         }}>
-                            Are you sure you want to delete "{selectedItem?.source_name}"?
+                            {selectedItem?.deleteMessage
+                                ? selectedItem.deleteMessage
+                                : `Are you sure you want to delete "${selectedItem?.source_name}"?`
+                            }
                         </Text>
+
+                        {selectedItem?.usedCount !== undefined && (
+                            <Text style={{
+                                fontSize: 13,
+                                fontFamily: Fonts.Bold,
+                                color: '#ef4444',
+                                textAlign: 'center',
+                                marginBottom: 20,
+                            }}>
+                                Used in {selectedItem.usedCount} {selectedItem.usedCount === 1 ? 'lead' : 'leads'}
+                            </Text>
+                        )}
 
                         <View style={{ flexDirection: 'row', width: '100%' }}>
 
                             {/* CANCEL */}
                             <TouchableOpacity
-                                onPress={() => setDeleteModal(false)}
+                                onPress={() => {
+                                    setDeleteModal(false);
+
+                                    // important: old 409 message clear
+                                    setSelectedItem(prev => prev ? {
+                                        ...prev,
+                                        deleteMessage: undefined,
+                                        usedCount: undefined,
+                                    } : null);
+                                }}
                                 style={{
                                     flex: 1,
                                     backgroundColor: '#f1f5f9',
@@ -487,32 +567,34 @@ const SourceList = ({ navigation }) => {
                                     fontFamily: Fonts.Bold,
                                     color: '#475569'
                                 }}>
-                                    Cancel
+                                    {selectedItem?.deleteMessage ? 'Close' : 'Cancel'}
                                 </Text>
                             </TouchableOpacity>
 
                             {/* DELETE */}
-                            <TouchableOpacity
-                                onPress={() => {
-                                    setDeleteModal(false);
-                                    handleDelete();
-                                }}
-                                style={{
-                                    flex: 1,
-                                    backgroundColor: '#ef4444',
-                                    padding: 12,
-                                    borderRadius: 8,
-                                    marginLeft: 5,
-                                    alignItems: 'center'
-                                }}
-                            >
-                                <Text style={{
-                                    color: '#fff',
-                                    fontFamily: Fonts.Bold
-                                }}>
-                                    Delete
-                                </Text>
-                            </TouchableOpacity>
+                            {!selectedItem?.deleteMessage && (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setDeleteModal(false);
+                                        handleDelete();
+                                    }}
+                                    style={{
+                                        flex: 1,
+                                        backgroundColor: '#ef4444',
+                                        padding: 12,
+                                        borderRadius: 8,
+                                        marginLeft: 5,
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    <Text style={{
+                                        color: '#fff',
+                                        fontFamily: Fonts.Bold
+                                    }}>
+                                        Delete
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
 
                         </View>
                     </View>

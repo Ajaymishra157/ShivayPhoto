@@ -435,16 +435,16 @@ const MonthReport = ({ navigation }) => {
                                                 borderBottomColor: '#e2e8f0',
                                             }}>
                                                 {[
-                                                    index + 1,
-                                                    formatDate(row.enquiry_date),
-                                                    row.total_enquiries,
-                                                    row.pending,
-                                                    row.unresponsive,
-                                                    row.followup,
-                                                    row.quotation_sent,
-                                                    row.converted,
-                                                    row.end,
-                                                ].map((val, i) => (
+                                                    { val: index + 1, isTotal: false },
+                                                    { val: formatDate(row.enquiry_date), isTotal: false },
+                                                    { val: row.total_enquiries, isTotal: true },
+                                                    { val: row.pending, isTotal: false },
+                                                    { val: row.unresponsive, isTotal: false },
+                                                    { val: row.followup, isTotal: false },
+                                                    { val: row.quotation_sent, isTotal: false },
+                                                    { val: row.converted, isTotal: false },
+                                                    { val: row.end, isTotal: false },
+                                                ].map(({ val, isTotal }, i) => (
                                                     <View key={i} style={{
                                                         width: COL_WIDTHS[i],
                                                         paddingVertical: 10,
@@ -454,14 +454,34 @@ const MonthReport = ({ navigation }) => {
                                                         justifyContent: 'center',
                                                         alignItems: 'center',
                                                     }}>
-                                                        <Text style={{
-                                                            fontSize: 12,
-                                                            fontFamily: i === 2 ? Fonts.Bold : Fonts.Regular,
-                                                            color: i === 2 ? Colors.buttonbgcolor : '#475569',
-                                                            textAlign: 'center',
-                                                        }}>
-                                                            {val}
-                                                        </Text>
+                                                        {isTotal ? (
+                                                            <TouchableOpacity
+                                                                onPress={() => navigation.navigate('LeadListsMonthWise', {
+                                                                    date: row.enquiry_date,
+                                                                    type: '',
+                                                                })}
+                                                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                                            >
+                                                                <Text style={{
+                                                                    fontSize: 12,
+                                                                    fontFamily: Fonts.Bold,
+                                                                    color: Colors.buttonbgcolor,
+                                                                    textAlign: 'center',
+                                                                    textDecorationLine: 'underline',
+                                                                }}>
+                                                                    {val}
+                                                                </Text>
+                                                            </TouchableOpacity>
+                                                        ) : (
+                                                            <Text style={{
+                                                                fontSize: 12,
+                                                                fontFamily: Fonts.Regular,
+                                                                color: '#475569',
+                                                                textAlign: 'center',
+                                                            }}>
+                                                                {val}
+                                                            </Text>
+                                                        )}
                                                     </View>
                                                 ))}
                                             </View>
@@ -557,6 +577,15 @@ const MonthReport = ({ navigation }) => {
                         }}>
                             Select Month
                         </Text>
+                        <TouchableOpacity style={{
+                            position: 'absolute',
+                            top: 10,
+                            right: 10,
+                            zIndex: 10,
+                            padding: 6,
+                        }} onPress={() => setMonthModal(false)}>
+                            <Icon name="close" size={20} color="#64748b" />
+                        </TouchableOpacity>
                         <FlatList
                             data={MONTHS}
                             keyExtractor={(item) => item.id}
@@ -612,6 +641,15 @@ const MonthReport = ({ navigation }) => {
                         }}>
                             Select Staff
                         </Text>
+                        <TouchableOpacity style={{
+                            position: 'absolute',
+                            top: 10,
+                            right: 10,
+                            zIndex: 10,
+                            padding: 6,
+                        }} onPress={() => setStaffModal(false)}>
+                            <Icon name="close" size={20} color="#64748b" />
+                        </TouchableOpacity>
 
                         {/* Search */}
                         <View style={{

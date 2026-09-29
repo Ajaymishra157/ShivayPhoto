@@ -53,6 +53,7 @@ const Login = ({ navigation }) => {
                 const result = await response.json();
                 if (result.code == 200) {
                     await AsyncStorage.setItem('id', result.payload.id.toString());
+                    await AsyncStorage.setItem('user_name', result.payload.user_name);
 
                     // ✅ Toast Show
                     Toast.show({

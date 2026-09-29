@@ -1,13 +1,35 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, FlatList, TextInput, TouchableOpacity,
-    SafeAreaView, StatusBar, RefreshControl
+    SafeAreaView, StatusBar, ActivityIndicator, RefreshControl,
+    ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { API, Colors, Fonts } from '../Commoncomponent/Constants';
 import ListBookingShimmer from '../Shimmer/Booking/ListBookingShimmer';
 
+const PAGE_SIZE = 20;
+
+/* Stage ke hisaab se color — pipeline stages */
+const STAGE_COLORS = {
+    'Concept Finalized': '#0EA5E9',
+    'Outfit Finalized': '#8B5CF6',
+    'Props Ready': '#F59E0B',
+    'Client Requirements': '#EC4899',
+    'Shoot Assignment': '#6366F1',
+    'Done': '#16A34A',
+};
+
+const STAGES = [
+    'Concept Finalized',
+    'Outfit Finalized',
+    'Props Ready',
+    'Client Requirements',
+    'Shoot Assignment',
+    'Done',
+];
+const getStageColor = stage => STAGE_COLORS[stage] || '#64748b';
 
 const formatDateTime = (dateString) => {
     if (!dateString) return '--';
@@ -26,44 +48,80 @@ const formatDateTime = (dateString) => {
 const Bookinglist = ({ navigation }) => {
     const [bookings, setBookings] = useState([]);
     const [filtered, setFiltered] = useState([]);
+    const [stageCounts, setStageCounts] = useState({});
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [isFirstBookingDone, setIsFirstBookingDone] = useState(false);
+    const [selectedStage, setSelectedStage] = useState('All');
 
-    const fetchBookings = async () => {
+    /* ================= CLIENT-SIDE PAGINATION ================= */
+    const [page, setPage] = useState(1);
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    const visibleData = filtered.slice(0, page * PAGE_SIZE);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, bookings]);
+
+    const handleLoadMore = () => {
+        if (loadingMore) return;
+        if (visibleData.length >= filtered.length) return;
+
+        setLoadingMore(true);
+        setTimeout(() => {
+            setPage(prev => prev + 1);
+            setLoadingMore(false);
+        }, 400);
+    };
+
+    const fetchBookings = async (stage = 'All') => {
         setLoading(true);
+
         try {
-            const response = await fetch(API.list_booking);
+            const response = await fetch(API.list_booking, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    stage: stage === 'All' ? '' : stage,
+                }),
+            });
+
             const result = await response.json();
 
             if (result.code == 200) {
-                setBookings(result.payload);
-                setFiltered(result.payload);
+                setBookings(result.payload || []);
+                setFiltered(result.payload || []);
+                setStageCounts(result.stage_counts || {});
             } else {
                 setBookings([]);
                 setFiltered([]);
+                setStageCounts({});
             }
         } catch (e) {
             setBookings([]);
             setFiltered([]);
+            setStageCounts({});
         }
+
         setIsFirstBookingDone(true);
         setLoading(false);
     };
 
     const onRefresh = async () => {
         setRefreshing(true);
-        await fetchBookings();
+        await fetchBookings(selectedStage);
         setRefreshing(false);
     };
-
     useFocusEffect(
         useCallback(() => {
             if (search === '') {
-                fetchBookings();
+                fetchBookings(selectedStage);
             }
-        }, [search])
+        }, [search, selectedStage])
     );
 
     const handleSearch = (text) => {
@@ -74,7 +132,8 @@ const Bookinglist = ({ navigation }) => {
             bookings.filter(b =>
                 (b.client_name || '').toLowerCase().includes(q) ||
                 (b.client_mobile || '').toLowerCase().includes(q) ||
-                (b.client_address || '').toLowerCase().includes(q)
+                (b.client_address || '').toLowerCase().includes(q) ||
+                (b.order_no || '').toString().toLowerCase().includes(q)
             )
         );
     };
@@ -97,12 +156,20 @@ const Bookinglist = ({ navigation }) => {
             }}
         >
 
+
             {/* STATUS */}
             <View style={{
                 position: 'absolute',
                 top: 0,
                 right: 0,
-                backgroundColor: '#d4edda',
+
+                backgroundColor:
+                    item.booking_status?.toLowerCase() === 'done'
+                        ? '#dcfce7'       // light green
+                        : item.booking_status?.toLowerCase() === 'inprocess'
+                            ? '#fef3c7'   // light orange
+                            : '#f1f5f9',  // default
+
                 paddingHorizontal: 10,
                 paddingVertical: 3,
                 borderBottomLeftRadius: 6,
@@ -112,9 +179,15 @@ const Bookinglist = ({ navigation }) => {
                 <Text style={{
                     fontSize: 10,
                     fontFamily: 'Inter-Bold',
-                    color: '#155724'
+
+                    color:
+                        item.booking_status?.toLowerCase() === 'done'
+                            ? '#15803d'       // green
+                            : item.booking_status?.toLowerCase() === 'inprocess'
+                                ? '#b45309'   // orange
+                                : '#64748b',  // default
                 }}>
-                    {item.status || '--'}
+                    {item.booking_status || '--'}
                 </Text>
             </View>
 
@@ -138,18 +211,38 @@ const Bookinglist = ({ navigation }) => {
                 </View>
             </View>
 
-            {/* INDEX */}
-            <Text style={{
-                fontSize: 11,
-                color: '#2c3e50',
-                marginBottom: 4,
-                fontFamily: 'Inter-Bold'
-            }}>
-                #{index + 1}
-            </Text>
+            {/* INDEX + ORDER NO */}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{
+                    fontSize: 11,
+                    color: '#2c3e50',
+                    marginBottom: 4,
+                    fontFamily: 'Inter-Bold'
+                }}>
+                    #{index + 1}
+                </Text>
 
-            {/* NAME */}
-            <Text>
+                {/* {item.order_no ? (
+                    <Text style={{
+                        fontSize: 11,
+                        color: '#94a3b8',
+                        marginBottom: 4,
+                        marginLeft: 8,
+                        fontFamily: 'Inter-Regular'
+                    }}>
+                        Order #{item.order_no}
+                    </Text>
+                ) : null} */}
+            </View>
+
+            {/* NAME + STAGE BADGE */}
+            <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                marginTop: 2,
+                paddingRight: 60,
+            }}>
                 <Text style={{
                     fontSize: 13,
                     color: '#2c3e50',
@@ -160,11 +253,30 @@ const Bookinglist = ({ navigation }) => {
                 <Text style={{
                     fontSize: 13,
                     color: '#7f8c8d',
-                    fontFamily: 'Inter-Regular'
+                    fontFamily: 'Inter-Regular',
+                    textTransform: 'capitalize'
                 }}>
                     {" "}{item.client_name || '--'}
                 </Text>
-            </Text>
+
+                {item.current_stage ? (
+                    <View style={{
+                        backgroundColor: `${getStageColor(item.current_stage)}1A`,
+                        borderRadius: 10,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        marginLeft: 8,
+                    }}>
+                        <Text style={{
+                            fontSize: 9,
+                            fontFamily: 'Inter-Bold',
+                            color: getStageColor(item.current_stage),
+                        }}>
+                            {item.current_stage}
+                        </Text>
+                    </View>
+                ) : null}
+            </View>
 
             {/* MOBILE */}
             <Text style={{ marginTop: 5 }}>
@@ -196,7 +308,8 @@ const Bookinglist = ({ navigation }) => {
                 <Text style={{
                     fontSize: 12,
                     color: '#7f8c8d',
-                    fontFamily: 'Inter-Regular'
+                    fontFamily: 'Inter-Regular',
+                    textTransform: 'capitalize'
                 }}>
                     {" "}{item.client_address || '--'}
                 </Text>
@@ -256,13 +369,14 @@ const Bookinglist = ({ navigation }) => {
             </View>
 
             {/* SEARCH */}
-            {(!isFirstBookingDone || bookings.length > 0 || search.length > 0) && (
+            {(
                 <View style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     backgroundColor: '#fff',
                     borderRadius: 12,
-                    margin: 14,
+                    marginHorizontal: 14,
+                    marginTop: 14,
                     paddingHorizontal: 12,
                     height: 44,
                     borderWidth: 0.5,
@@ -290,16 +404,130 @@ const Bookinglist = ({ navigation }) => {
                 </View>
             )}
 
+            {/* ================= STAGE COUNT CHIPS (non-clickable) ================= */}
+            {/* ================= STAGE FILTER CHIPS ================= */}
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    alignItems: 'center',
+                }}
+                style={{
+                    flexGrow: 0,
+                    minHeight: 54,
+                }}
+            >
+                {/* ALL */}
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                        setSelectedStage('All');
+                        setSearch('');
+                        fetchBookings('All');
+                    }}
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor:
+                            selectedStage === 'All'
+                                ? Colors.buttonbgcolor
+                                : '#fff',
+                        borderRadius: 20,
+                        paddingHorizontal: 12,
+                        minHeight: 34,
+                        borderWidth: 0.6,
+                        borderColor:
+                            selectedStage === 'All'
+                                ? Colors.buttonbgcolor
+                                : '#e2e8f0',
+                        marginRight: 8,
+                    }}
+                >
+                    <Text
+                        style={{
+                            fontSize: 11,
+                            fontFamily: Fonts.Bold,
+                            color:
+                                selectedStage === 'All'
+                                    ? '#fff'
+                                    : '#334155',
+                        }}
+                    >
+                        All ({stageCounts?.total ?? bookings.length})
+                    </Text>
+                </TouchableOpacity>
+
+                {/* STAGES */}
+                {STAGES.map((stage) => {
+                    const count = stageCounts?.[stage] ?? 0;
+                    const color = getStageColor(stage);
+                    const isActive = selectedStage === stage;
+
+                    return (
+                        <TouchableOpacity
+                            key={stage}
+                            activeOpacity={0.8}
+                            onPress={() => {
+                                setSelectedStage(stage);
+                                setSearch('');
+                                fetchBookings(stage);
+                            }}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor:
+                                    isActive ? color : '#fff',
+                                borderRadius: 20,
+                                paddingHorizontal: 12,
+                                minHeight: 34,
+                                borderWidth: 0.6,
+                                borderColor:
+                                    isActive ? color : '#e2e8f0',
+                                marginRight: 8,
+                            }}
+                        >
+                            <View
+                                style={{
+                                    width: 6,
+                                    height: 6,
+                                    borderRadius: 3,
+                                    backgroundColor:
+                                        isActive ? '#fff' : color,
+                                    marginRight: 6,
+                                }}
+                            />
+
+                            <Text
+                                style={{
+                                    fontSize: 11,
+                                    fontFamily: Fonts.Bold,
+                                    color:
+                                        isActive ? '#fff' : '#334155',
+                                }}
+                            >
+                                {stage} ({count})
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </ScrollView>
             {/* COUNT */}
-            {(!isFirstBookingDone || bookings.length > 0 || search.length > 0) && (
+            {(
                 <Text style={{
                     fontSize: 12,
                     fontFamily: Fonts.Regular,
                     color: '#94a3b8',
                     marginLeft: 16,
+                    marginTop: 10,
                     marginBottom: 4,
                 }}>
                     {filtered.length} booking{filtered.length !== 1 ? 's' : ''} found
+                    {search.length > 0 ? ` with ${search}` : ''}
                 </Text>
             )}
 
@@ -308,7 +536,7 @@ const Bookinglist = ({ navigation }) => {
                 <ListBookingShimmer />
             ) : (
                 <FlatList
-                    data={filtered}
+                    data={visibleData}
                     keyExtractor={(item, index) => item.client_id?.toString() || index.toString()}
                     renderItem={renderItem}
                     keyboardShouldPersistTaps="handled"
@@ -316,6 +544,15 @@ const Bookinglist = ({ navigation }) => {
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.buttonbgcolor]} />
+                    }
+                    onEndReachedThreshold={0.4}
+                    onEndReached={handleLoadMore}
+                    ListFooterComponent={
+                        loadingMore ? (
+                            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color={Colors.buttonbgcolor} />
+                            </View>
+                        ) : null
                     }
                     ListEmptyComponent={
                         <View style={{ alignItems: 'center', marginTop: 220 }}>

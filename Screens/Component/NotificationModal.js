@@ -53,10 +53,17 @@ const NotificationModal = ({ visible, onClose }) => {
 
     const getInitials = (name) => {
         if (!name) return 'NA';
-        const words = name.split(' ');
-        return words.length > 1
-            ? words[0][0] + words[1][0]
-            : words[0][0];
+
+        const words = name.trim().split(' ').filter(w => w.length > 0);
+
+        if (words.length === 1) {
+            return words[0][0]?.toUpperCase();
+        }
+
+        return (
+            (words[0][0] || '') +
+            (words[1][0] || '')
+        ).toUpperCase();
     };
 
 
@@ -188,8 +195,11 @@ const NotificationModal = ({ visible, onClose }) => {
                                         alignItems: 'center',
                                         paddingVertical: 40
                                     }}>
+                                        <Icon name="clipboard-text-off-outline" size={40} color="#cbd5e1" />
+
                                         <Text style={{
                                             fontSize: 14,
+                                            marginTop: 8,
                                             fontFamily: 'Inter-Regular',
                                             color: '#94A3B8'
                                         }}>

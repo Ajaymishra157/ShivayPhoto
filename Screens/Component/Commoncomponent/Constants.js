@@ -16,6 +16,7 @@ const Colors = {
   partycolor: '#fdfbf1',
 
   buttonbgcolor: '#7367f0',
+  light_buttonbgcolor: '#8f85f3',
   btntext: '#fff',
 
   PLACEHOLDER: '#999999',
@@ -27,7 +28,11 @@ const Colors = {
 };
 
 // const BASE_URL = 'https://crm.shivayphoto.com/dev/api/';
-const BASE_URL = 'https://crm.shivayphoto.com/api/';
+// const BASE_URL = 'https://crm.shivayphoto.com/api/';
+
+// const BASE_URL = 'https://shivayphoto.studiomanagers.in/api/';
+const BASE_URL = 'https://shivayphoto.studiomanagers.in/dev/api/';
+
 
 const API = {
   BASE_URL,
@@ -43,6 +48,8 @@ const API = {
   status_update: `${BASE_URL}users/status_update.php`,
   change_password: `${BASE_URL}users/change_password.php`,
   list_usertype: `${BASE_URL}users/list_usertype.php`,
+  list_user_typewise: `${BASE_URL}users/list_user_typewise.php`,
+
 
 
   // source
@@ -100,9 +107,100 @@ const API = {
   state_list: `${BASE_URL}list_state.php`,
   city_list: `${BASE_URL}list_city.php`,
 
+
+  // Coordination
+  assign_editor: `${BASE_URL}coordination/assign_editor.php`,
+  assign_editor_coordinator: `${BASE_URL}coordination/assign_editor_coordinator.php`,
+  create_task: `${BASE_URL}coordination/create_task.php`,
+  photographer_status: `${BASE_URL}coordination/photographer_status.php`,
+  task_status: `${BASE_URL}coordination/task_status.php`,
+
+  // Payments (CRUD)
+  payment_list: `${BASE_URL}manage_payment/payment_list.php`,
+  payment_add: `${BASE_URL}manage_payment/payment_add.php`,
+  payment_update: `${BASE_URL}manage_payment/payment_update.php`,
+  payment_delete: `${BASE_URL}manage_payment/payment_delete.php`,
+
+
   // Dashboard
   counting: `${BASE_URL}dashboard/counting.php`,
   followup_api: `${BASE_URL}dashboard/followup_api.php`,
+
+
+  // Coordination
+  assign_photographer: `${BASE_URL}coordination/assign_photographer.php`,
+  update_stage: `${BASE_URL}coordination/coordination_update_stage.php`,
+
+
+  // Coordination
+  coordinator_wise_list: `${BASE_URL}coordination/coordinator_wise_list.php`,
+  coordination_booking_detail: `${BASE_URL}coordination/coordination_booking_detail.php`,
+  photographer_assignments_list: `${BASE_URL}coordination/photographer_assignments_list.php`,
+
+  list_photographer_couting: `${BASE_URL}photographer/list_photographer_couting.php`,
+  my_assignments: `${BASE_URL}photographer/my_assignments.php`,
+
+  photographer_mark_done: `${BASE_URL}coordination/photographer_mark_done.php`,
+
+
+  list_editor_assignment: `${BASE_URL}codinator_editer/list_editor_assignment.php`,
+  booking_task: `${BASE_URL}codinator_editer/booking_task.php`,
+
+
+  list_post_production: `${BASE_URL}post_production/list_post_production.php`,
+  assign_editor_workflow: `${BASE_URL}post_production/assign_editor_workflow.php`,
+
+
+  editor_dashboard: `${BASE_URL}editor/editor_dashboard.php`,
+  editor_tasks: `${BASE_URL}editor/editor_tasks.php`,
+  status_change: `${BASE_URL}editor/status_change.php`,
+
+
+  today_shoot_list: `${BASE_URL}coordination/today_shoot_list.php`,
+
+
+  notification_list: `${BASE_URL}photographer/notification_list.php`,
+
+
+  add_branch: `${BASE_URL}branch/add_branch.php`,
+  update_branch: `${BASE_URL}branch/update_branch.php`,
+  list_branch: `${BASE_URL}branch/list_branch.php`,
+  delete_branch: `${BASE_URL}branch/delete_branch.php`,
+
+  add_package: `${BASE_URL}package/add_package.php`,
+  update_package: `${BASE_URL}package/update_package.php`,
+  list_package: `${BASE_URL}package/list_package.php`,
+  delete_package: `${BASE_URL}package/delete_package.php`,
+
+  coordination_next_days: `${BASE_URL}coordination/coordination_next_days.php`,
+
+
+
+
+
+
+  shoot_schedule: `${BASE_URL}dashboard/shoot_schedule.php`,
+  dashboard_api: `${BASE_URL}dashboard/dashboard_api.php`,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

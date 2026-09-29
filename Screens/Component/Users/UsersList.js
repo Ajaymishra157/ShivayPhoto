@@ -1,12 +1,38 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, FlatList, TextInput, TouchableOpacity,
-    SafeAreaView, StatusBar, ActivityIndicator, RefreshControl
+    SafeAreaView, StatusBar, ActivityIndicator, RefreshControl,
+    ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { API, Colors, Fonts } from '../Commoncomponent/Constants';
 import UserListShimmer from '../Shimmer/Users/UserListShimmer';
+
+const PAGE_SIZE = 20;
+
+/* Type ke hisaab se badge color — list na mile to default grey */
+const ROLE_COLORS = {
+    'Admin': '#0284C7',
+    'Coordinator': '#8B5CF6',
+    'Coordinator → Editor': '#8B5CF6',
+    'Photographer': '#F59E0B',
+    'Photo Editor': '#EC4899',
+    'Video Editor': '#6366F1',
+    'Sales-Person': '#16A34A',
+    'Booking-Person': '#0EA5E9',
+};
+const getRoleColor = type => ROLE_COLORS[type] || '#64748b';
+
+const getRoleDisplayName = (type) => {
+    const ROLE_DISPLAY_NAMES = {
+        'Coordinator → Editor': 'Coordinator Post Production',
+    };
+
+    return ROLE_DISPLAY_NAMES[type] || type;
+};
+
+
 
 const formatDateTime = (dateString) => {
     if (!dateString) return '--';
@@ -25,22 +51,64 @@ const formatDateTime = (dateString) => {
 const UsersList = ({ navigation }) => {
     const [users, setUsers] = useState([]);
     const [filtered, setFiltered] = useState([]);
+    const [counts, setCounts] = useState({});
+    const [masterCounts, setMasterCounts] = useState({});
+    const [selectedType, setSelectedType] = useState(''); // '' = All
+
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [isFirstLoadDone, setIsFirstLoadDone] = useState(false);
 
-    const fetchUsers = async () => {
+    /* ================= CLIENT-SIDE PAGINATION ================= */
+    const [page, setPage] = useState(1);
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    const visibleData = filtered.slice(0, page * PAGE_SIZE);
+
+    // search / type / fresh-data badalte hi pagination reset
+    useEffect(() => {
+        setPage(1);
+    }, [search, selectedType, users]);
+
+    const handleLoadMore = () => {
+        if (loadingMore) return;
+        if (visibleData.length >= filtered.length) return;
+
+        setLoadingMore(true);
+        // real API pagination nahi hai, isliye chota sa delay taaki loader dikhe
+        setTimeout(() => {
+            setPage(prev => prev + 1);
+            setLoadingMore(false);
+        }, 400);
+    };
+
+    /* ================= FETCH (type-wise filter API se) ================= */
+    const fetchUsers = async (type = selectedType) => {
         setLoading(true);
         try {
-            const response = await fetch(API.list_user);
+            const response = await fetch(API.list_user, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ admin_type: type }),
+            });
             const result = await response.json();
+
             if (result.code == 200) {
-                setUsers(result.payload);
-                setFiltered(result.payload);
+                setUsers(result.payload || []);
+                setFiltered(result.payload || []);
+                setCounts(result.counts || {});
+
+                // ⬅ NEW — master counts ko hamesha update karte raho jab bhi
+                // API se non-empty counts aaye, taaki tabs kabhi disappear na ho
+                if (result.counts && Object.keys(result.counts).length > 0) {
+                    setMasterCounts(result.counts);
+                }
             } else {
                 setUsers([]);
                 setFiltered([]);
+                setCounts({});
+                // ⬅ NEW — masterCounts ko yahan reset NAHI karna, warna tabs gayab ho jayenge
             }
         } catch (e) {
             setUsers([]);
@@ -52,16 +120,16 @@ const UsersList = ({ navigation }) => {
 
     const onRefresh = async () => {
         setRefreshing(true);
-        await fetchUsers();
+        await fetchUsers(selectedType);
         setRefreshing(false);
     };
 
     useFocusEffect(
         useCallback(() => {
             if (search === '') {
-                fetchUsers();   // 🔥 sirf jab search empty ho
+                fetchUsers(selectedType);   // 🔥 sirf jab search empty ho
             }
-        }, [search])
+        }, [search, selectedType])
     );
 
     const handleSearch = (text) => {
@@ -75,6 +143,20 @@ const UsersList = ({ navigation }) => {
             )
         );
     };
+
+    /* Type tab select — API se hi filter hoke aata hai */
+    const selectType = (type) => {
+        if (type === selectedType) return;
+        setSelectedType(type);
+        setSearch('');
+        setFiltered([]);
+        fetchUsers(type);
+    };
+
+    const totalCount = Object.values(masterCounts).reduce(
+        (sum, c) => sum + (Number(c) || 0),
+        0
+    );
 
     const renderItem = ({ item, index }) => (
         <TouchableOpacity
@@ -156,8 +238,14 @@ const UsersList = ({ navigation }) => {
             </Text>
 
 
-            {/* NAME */}
-            <Text style={{ marginTop: 2 }}>
+            {/* NAME + TYPE BADGE */}
+            <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                marginTop: 2,
+                paddingRight: 60, // status/arrow ke neeche na aaye
+            }}>
                 <Text style={{
                     fontSize: 13,
                     color: '#2c3e50',
@@ -169,11 +257,29 @@ const UsersList = ({ navigation }) => {
                 <Text style={{
                     fontSize: 13,
                     color: '#7f8c8d',
-                    fontFamily: 'Inter-Regular'
+                    fontFamily: 'Inter-Regular',
+                    textTransform: 'capitalize'
                 }}>
                     {" "}{item.user_name || '--'}
                 </Text>
-            </Text>
+
+                <View style={{
+                    backgroundColor: `${getRoleColor(item.user_type)}1A`,
+                    borderRadius: 10,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    marginLeft: 8,
+                }}>
+                    <Text style={{
+                        fontSize: 9,
+                        fontFamily: 'Inter-Bold',
+                        color: getRoleColor(item.user_type),
+                        textTransform: 'capitalize'
+                    }}>
+                        {getRoleDisplayName(item.user_type) || '--'}
+                    </Text>
+                </View>
+            </View>
 
 
             {/* MOBILE */}
@@ -209,7 +315,8 @@ const UsersList = ({ navigation }) => {
                 <Text style={{
                     fontSize: 12,
                     color: '#7f8c8d',
-                    fontFamily: 'Inter-Regular'
+                    fontFamily: 'Inter-Regular',
+                    textTransform: 'capitalize'
                 }}>
                     {" "}{item.user_email || '--'}
                 </Text>
@@ -237,6 +344,7 @@ const UsersList = ({ navigation }) => {
 
         </TouchableOpacity>
     );
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f6f8' }}>
             <StatusBar backgroundColor={Colors.buttonbgcolor} barStyle="light-content" />
@@ -268,13 +376,14 @@ const UsersList = ({ navigation }) => {
             </View>
 
             {/* SEARCH */}
-            {(!isFirstLoadDone || users.length > 0 || search.length > 0) && (
+            {isFirstLoadDone && (
                 <View style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     backgroundColor: '#fff',
                     borderRadius: 12,
-                    margin: 14,
+                    marginHorizontal: 14,
+                    marginTop: 14,
                     paddingHorizontal: 12,
                     height: 44,
                     borderWidth: 0.5,
@@ -302,16 +411,118 @@ const UsersList = ({ navigation }) => {
                 </View>
             )}
 
+            {/* ================= TYPE-WISE COUNT CHIPS (search ke niche) ================= */}
+            {Object.keys(masterCounts).length > 0 && (
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyboardShouldPersistTaps='handled'
+                    contentContainerStyle={{
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        alignItems: 'center',
+                    }}
+                    style={{
+                        flexGrow: 0,
+                        minHeight: 54,
+                    }}
+                >
+                    {/* ALL */}
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => selectType('')}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+
+                            backgroundColor:
+                                selectedType === ''
+                                    ? Colors.buttonbgcolor
+                                    : '#fff',
+
+                            borderRadius: 20,
+                            paddingHorizontal: 12,
+
+                            // paddingVertical: 7,   // remove
+                            minHeight: 34,          // add
+
+                            borderWidth: 0.6,
+                            borderColor:
+                                selectedType === ''
+                                    ? Colors.buttonbgcolor
+                                    : '#e2e8f0',
+
+                            marginRight: 8,
+                        }}
+                    >
+                        <Text style={{
+                            fontSize: 11,
+                            fontFamily: Fonts.Bold,
+                            color: selectedType === '' ? '#fff' : '#334155',
+                        }}>
+                            All ({totalCount})
+                        </Text>
+                    </TouchableOpacity>
+
+                    {Object.entries(masterCounts).map(([type, count], idx) => {
+                        const active = selectedType === type;
+                        const isLast = idx === Object.entries(masterCounts).length - 1;
+                        return (
+                            <TouchableOpacity
+                                key={type}
+                                activeOpacity={0.8}
+                                onPress={() => selectType(type)}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+
+                                    backgroundColor:
+                                        active ? Colors.buttonbgcolor : '#fff',
+
+                                    borderRadius: 20,
+                                    paddingHorizontal: 12,
+
+                                    // paddingVertical: 7,   // remove
+                                    minHeight: 34,          // add
+
+                                    borderWidth: 0.6,
+                                    borderColor:
+                                        active
+                                            ? Colors.buttonbgcolor
+                                            : '#e2e8f0',
+
+                                    marginRight: isLast ? 0 : 8,
+                                }}
+                            >
+                                <Text style={{
+                                    fontSize: 11,
+                                    fontFamily: Fonts.Bold,
+                                    color: active ? '#fff' : '#334155',
+                                }}>
+                                    {type === 'Coordinator → Editor'
+                                        ? 'Coordinator Post Production'
+                                        : type} ({count})
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
+            )}
+
             {/* COUNT */}
-            {(!isFirstLoadDone || users.length > 0 || search.length > 0) && (
+            {isFirstLoadDone && (
                 <Text style={{
                     fontSize: 12,
                     fontFamily: Fonts.Regular,
                     color: '#94a3b8',
                     marginLeft: 16,
+                    marginTop: 10,
                     marginBottom: 4,
                 }}>
                     {filtered.length} user{filtered.length !== 1 ? 's' : ''} found
+                    {search.length > 0 ? ` with ${search}` : ''}
                 </Text>
             )}
 
@@ -320,14 +531,23 @@ const UsersList = ({ navigation }) => {
                 <UserListShimmer />
             ) : (
                 <FlatList
-                    data={filtered}
-                    keyExtractor={(item, index) => item.user_id?.toString() || index.toString()}
+                    data={visibleData}
+                    keyExtractor={(item, index) => item.id?.toString() || index.toString()}
                     renderItem={renderItem}
                     contentContainerStyle={{ paddingBottom: 100, paddingTop: 4, paddingHorizontal: 12 }}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps='handled'
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.buttonbgcolor]} />
+                    }
+                    onEndReachedThreshold={0.4}
+                    onEndReached={handleLoadMore}
+                    ListFooterComponent={
+                        loadingMore ? (
+                            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color={Colors.buttonbgcolor} />
+                            </View>
+                        ) : null
                     }
                     ListEmptyComponent={
                         <View style={{ alignItems: 'center', marginTop: 220 }}>

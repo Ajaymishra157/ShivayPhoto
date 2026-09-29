@@ -22,6 +22,14 @@ const formatDateTime = (dateString) => {
     return `${day}-${month}-${year} ${hours}:${minutes} ${ampm}`;
 };
 
+const getDisplayUserType = (type) => {
+    if (type === 'Coordinator → Editor') {
+        return 'Coordinator Post Production';
+    }
+
+    return type;
+};
+
 const InfoRow = ({ icon, label, value }) => (
     <View style={{
         flexDirection: 'row',
@@ -54,6 +62,7 @@ const InfoRow = ({ icon, label, value }) => (
                 fontSize: 13,
                 fontFamily: 'Inter-Bold',
                 color: '#1e293b',
+                textTransform: 'capitalize',
             }}>
                 {value || '--'}
             </Text>
@@ -245,7 +254,8 @@ const UsersDetail = ({ navigation, route }) => {
                                 fontSize: 16,
                                 fontFamily: 'Inter-Bold',
                                 color: Colors.buttonbgcolor,
-                                flex: 1
+                                flex: 1,
+                                textTransform: 'capitalize',
                             }}>
                                 {userData.user_name}
                             </Text>
@@ -295,7 +305,11 @@ const UsersDetail = ({ navigation, route }) => {
 
                         <InfoRow icon="phone-outline" label="Mobile" value={userData.user_mobile} />
                         <InfoRow icon="email-outline" label="Email" value={userData.user_email} />
-                        <InfoRow icon="account-outline" label="User Type" value={userData.user_type} />
+                        <InfoRow
+                            icon="account-outline"
+                            label="User Type"
+                            value={getDisplayUserType(userData.user_type)}
+                        />
                         <InfoRow icon="calendar-outline" label="Entry On" value={formatDateTime(userData.entry_date)} />
 
                     </View>

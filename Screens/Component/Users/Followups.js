@@ -363,6 +363,15 @@ const InnerPickerModal = React.memo(({ visible, onClose, title, data, selected, 
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
             <View style={styles.pickerCard} onStartShouldSetResponder={() => true}>
                 <Text style={styles.pickerTitle}>{title}</Text>
+                <TouchableOpacity style={{
+                    position: 'absolute',
+                    top: 10,
+                    right: 10,
+                    zIndex: 10,
+                    padding: 6,
+                }} onPress={onClose}>
+                    <Icon name="close" size={20} color="#64748b" />
+                </TouchableOpacity>
                 <FlatList
                     data={data}
                     keyExtractor={item => String(item[keyField])}
@@ -397,6 +406,7 @@ const Followups = () => {
     const [users, setUsers] = useState([]);
     const [staffModal, setStaffModal] = useState(false);
     const [staffSearch, setStaffSearch] = useState('');
+    const [userType, setUserType] = useState('');
     const inputRef = useRef(null);
     const navigation = useNavigation();
 
@@ -421,6 +431,33 @@ const Followups = () => {
             const result = await response.json();
             setUsers(result.code == 200 ? result.payload : []);
         } catch (e) { setUsers([]); }
+    };
+
+    useEffect(() => {
+        fetchUserType();
+    }, []);
+
+    const fetchUserType = async () => {
+        try {
+            const userId = await AsyncStorage.getItem('id');
+
+            const res = await fetch(API.list_usertype, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: userId })
+            });
+
+            const result = await res.json();
+
+            if (result.code == 200 && result.payload.length > 0) {
+                setUserType(result.payload[0].user_type);
+            } else {
+                setUserType('');
+            }
+        } catch (error) {
+            console.log('UserType Error:', error);
+            setUserType('');
+        }
     };
 
     // Fetch leads whenever tab / date / staff changes
@@ -496,8 +533,16 @@ const Followups = () => {
     };
 
     const onDateChange = (event, date) => {
-        setShowDatePicker(Platform.OS === 'ios');
-        if (date) setSelectedDate(date);
+        setShowDatePicker(false);
+
+        // Agar user ne Cancel kiya ho to kuch bhi select na ho
+        if (event?.type === 'dismissed') {
+            return;
+        }
+
+        if (date) {
+            setSelectedDate(date);
+        }
     };
 
     const clearDate = () => {
@@ -533,6 +578,8 @@ const Followups = () => {
     ];
     const getAvatarColor = (id) => avatarColors[(id || 0) % avatarColors.length];
 
+    const isAdmin = userType?.toLowerCase() === 'admin';
+
     return (
         <View style={styles.card}>
             {/* ── Card Header ── */}
@@ -543,7 +590,10 @@ const Followups = () => {
                 <View style={styles.filtersRow}>
                     {/* Date Picker Button */}
                     <TouchableOpacity
-                        style={styles.filterBtn}
+                        style={[
+                            styles.filterBtn,
+                            userType !== 'Admin' && { flex: 1 } // Non-admin ke liye full width
+                        ]}
                         onPress={() => setShowDatePicker(true)}
                         activeOpacity={0.8}
                     >
@@ -563,27 +613,29 @@ const Followups = () => {
                     </TouchableOpacity>
 
                     {/* Staff Dropdown */}
-                    <TouchableOpacity
-                        style={styles.pickerWrapper}
-                        onPress={() => setStaffModal(true)}
-                        activeOpacity={0.8}
-                    >
-                        <Icon name="account-outline" size={15} color="#64748B" style={{ marginLeft: 8 }} />
-                        <Text style={[styles.staffText, selectedStaffName && { color: '#0F172A' }]}>
-                            {selectedStaffName || 'Select Staff'}
-                        </Text>
-                        {selectedStaff ? (
-                            <TouchableOpacity
-                                onPress={clearStaff}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                style={styles.clearIcon}
-                            >
-                                <Icon name="close-circle" size={15} color="#94A3B8" />
-                            </TouchableOpacity>
-                        ) : (
-                            <Icon name="chevron-down" size={18} color="#64748B" style={{ marginRight: 8 }} />
-                        )}
-                    </TouchableOpacity>
+                    {isAdmin && (
+                        <TouchableOpacity
+                            style={styles.pickerWrapper}
+                            onPress={() => setStaffModal(true)}
+                            activeOpacity={0.8}
+                        >
+                            <Icon name="account-outline" size={15} color="#64748B" style={{ marginLeft: 8 }} />
+                            <Text style={[styles.staffText, selectedStaffName && { color: '#0F172A' }]}>
+                                {selectedStaffName || 'Select Staff'}
+                            </Text>
+                            {selectedStaff ? (
+                                <TouchableOpacity
+                                    onPress={clearStaff}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    style={styles.clearIcon}
+                                >
+                                    <Icon name="close-circle" size={15} color="#94A3B8" />
+                                </TouchableOpacity>
+                            ) : (
+                                <Icon name="chevron-down" size={18} color="#64748B" style={{ marginRight: 8 }} />
+                            )}
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
 
@@ -900,7 +952,7 @@ const styles = StyleSheet.create({
     },
     tabBadgeActive: { backgroundColor: '#ff4c51' },
     tabBadgeInactive: { backgroundColor: '#ff4c51' },
-    tabBadgeText: { fontSize: 11, fontFamily: 'Inter-Bold' },
+    tabBadgeText: { fontSize: 9, fontFamily: 'Inter-Bold' },
     tabBadgeTextActive: { color: '#FFFFFF' },
     tabBadgeTextInactive: { color: '#FFFFFF' },
 

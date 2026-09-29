@@ -1,18 +1,25 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Dimensions } from 'react-native';
+import {
+    View,
+    StyleSheet,
+    Animated,
+    Dimensions,
+    SafeAreaView,
+    ScrollView,
+} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 
 const { width } = Dimensions.get('window');
+const PURPLE = '#7367f0';
 
 const LeadDetailshimmer = () => {
-
     const shimmerAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         Animated.loop(
             Animated.timing(shimmerAnim, {
                 toValue: 1,
-                duration: 1200,
+                duration: 1300,
                 useNativeDriver: true,
             })
         ).start();
@@ -25,9 +32,14 @@ const LeadDetailshimmer = () => {
 
     const Shimmer = ({ style }) => (
         <View style={[styles.shimmerBox, style]}>
-            <Animated.View style={[styles.absoluteFill, { transform: [{ translateX }] }]}>
+            <Animated.View
+                style={[
+                    StyleSheet.absoluteFillObject,
+                    { transform: [{ translateX }] },
+                ]}
+            >
                 <LinearGradient
-                    colors={['#e5e7eb', '#f1f5f9', '#e5e7eb']}
+                    colors={['#e5e7eb', '#f8fafc', '#e5e7eb']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={{ width: '100%', height: '100%' }}
@@ -37,52 +49,89 @@ const LeadDetailshimmer = () => {
     );
 
     return (
-        <View style={styles.container}>
-
+        <SafeAreaView style={styles.container}>
             {/* HEADER */}
-            <View style={styles.header} />
+            <View style={styles.header}>
+                <Shimmer style={styles.headerIcon} />
+                <Shimmer style={styles.headerTitle} />
+                <View style={{ width: 22 }} />
+            </View>
 
-            {/* HERO */}
+            {/* HERO BANNER */}
             <View style={styles.hero}>
                 <Shimmer style={styles.avatar} />
                 <View style={{ flex: 1 }}>
-                    <Shimmer style={styles.lineLg} />
-                    <Shimmer style={styles.lineSm} />
-                    <Shimmer style={styles.lineSm} />
-                    <Shimmer style={styles.badge} />
+                    <Shimmer style={styles.heroName} />
+                    <Shimmer style={styles.heroMeta} />
+                    <Shimmer style={styles.heroMetaSmall} />
+                    <Shimmer style={styles.heroBadge} />
                 </View>
             </View>
 
-            {/* CARD 1 */}
-            <View style={styles.card}>
-                <Shimmer style={styles.lineTitle} />
-                {[...Array(6)].map((_, i) => (
-                    <Shimmer key={i} style={styles.lineRow} />
-                ))}
+            {/* TAB BAR */}
+            <View style={styles.tabBar}>
+                <Shimmer style={styles.tabItem} />
+                <Shimmer style={styles.tabItem} />
+                <Shimmer style={styles.tabItem} />
             </View>
 
-            {/* CARD 2 */}
-            <View style={styles.card}>
-                <Shimmer style={styles.lineTitle} />
-                <Shimmer style={styles.lineRow} />
-                <Shimmer style={styles.lineRow} />
-            </View>
-
-            {/* TIMELINE */}
-            <View style={styles.card}>
-                <Shimmer style={styles.lineTitle} />
-                {[...Array(4)].map((_, i) => (
-                    <View key={i} style={{ flexDirection: 'row', marginBottom: 12 }}>
-                        <Shimmer style={styles.timelineDot} />
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                            <Shimmer style={styles.lineSm} />
-                            <Shimmer style={styles.lineRow} />
+            <ScrollView showsVerticalScrollIndicator={false}>
+                {/* TIMELINE CARD */}
+                <View style={styles.card}>
+                    {[...Array(3)].map((_, i) => (
+                        <View key={i} style={styles.timelineRow}>
+                            <View style={styles.timelineLeft}>
+                                <Shimmer style={styles.timelineDot} />
+                                {i !== 2 && <View style={styles.timelineLine} />}
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 10 }}>
+                                <Shimmer style={styles.timelineBadge} />
+                                <Shimmer style={styles.timelineText} />
+                                <Shimmer style={styles.timelineTextShort} />
+                                <Shimmer style={styles.timelineDate} />
+                            </View>
                         </View>
-                    </View>
-                ))}
-            </View>
+                    ))}
+                </View>
 
-        </View>
+                {/* ABOUT CARD */}
+                <View style={styles.card}>
+                    {[...Array(5)].map((_, i) => (
+                        <View key={i}>
+                            <View style={styles.infoPair}>
+                                <Shimmer style={styles.infoItem} />
+                                <Shimmer style={styles.infoItem} />
+                            </View>
+                            {i !== 4 && <View style={styles.rowDivider} />}
+                        </View>
+                    ))}
+                </View>
+
+                {/* CONTACT CARD */}
+                <View style={styles.card}>
+                    <View style={styles.contactRow}>
+                        <Shimmer style={styles.contactIcon} />
+                        <View style={{ flex: 1 }}>
+                            <Shimmer style={styles.contactLineSm} />
+                            <Shimmer style={styles.contactLineLg} />
+                        </View>
+                        <Shimmer style={styles.actionBtn} />
+                        <Shimmer style={styles.actionBtn} />
+                    </View>
+
+                    <View style={styles.rowDivider} />
+
+                    <View style={styles.contactRow}>
+                        <Shimmer style={styles.contactIcon} />
+                        <View style={{ flex: 1 }}>
+                            <Shimmer style={styles.contactLineSm} />
+                            <Shimmer style={styles.contactLineLg} />
+                        </View>
+                        <Shimmer style={styles.actionBtn} />
+                    </View>
+                </View>
+            </ScrollView>
+        </SafeAreaView>
     );
 };
 
@@ -92,83 +141,191 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f8f7fa',
-        paddingBottom: 20
-    },
-
-    header: {
-        height: 60,
-        backgroundColor: '#e5e7eb'
-    },
-
-    hero: {
-        backgroundColor: '#e5e7eb',
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center'
-    },
-
-    avatar: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        marginRight: 12
-    },
-
-    badge: {
-        width: 100,
-        height: 20,
-        borderRadius: 20,
-        marginTop: 10
-    },
-
-    card: {
-        backgroundColor: '#fff',
-        margin: 12,
-        padding: 14,
-        borderRadius: 12
     },
 
     shimmerBox: {
+        backgroundColor: '#e5e7eb',
         overflow: 'hidden',
-        backgroundColor: '#e5e7eb'
-    },
-
-    absoluteFill: {
-        ...StyleSheet.absoluteFillObject,
-    },
-
-    lineTitle: {
-        height: 18,
-        width: '40%',
         borderRadius: 6,
-        marginBottom: 12
     },
 
-    lineLg: {
+    /* HEADER */
+    header: {
+        backgroundColor: PURPLE,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+    },
+    headerIcon: {
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        backgroundColor: '#ffffff33',
+    },
+    headerTitle: {
+        width: 120,
         height: 18,
+        borderRadius: 6,
+        backgroundColor: '#ffffff33',
+    },
+
+    /* HERO */
+    hero: {
+        backgroundColor: PURPLE,
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: 20,
+        alignItems: 'flex-start',
+    },
+    avatar: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        marginRight: 12,
+        backgroundColor: '#ffffff33',
+    },
+    heroName: {
         width: '70%',
+        height: 18,
         borderRadius: 6,
-        marginBottom: 8
+        marginBottom: 8,
     },
-
-    lineSm: {
+    heroMeta: {
+        width: '90%',
         height: 12,
-        width: '50%',
         borderRadius: 6,
-        marginBottom: 6
+        marginBottom: 6,
+    },
+    heroMetaSmall: {
+        width: '60%',
+        height: 12,
+        borderRadius: 6,
+        marginBottom: 6,
+    },
+    heroBadge: {
+        width: 120,
+        height: 18,
+        borderRadius: 20,
+        marginTop: 6,
     },
 
-    lineRow: {
-        height: 14,
-        width: '100%',
+    /* TAB BAR */
+    tabBar: {
+        flexDirection: 'row',
+        backgroundColor: '#fff',
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#e2e8f0',
+        justifyContent: 'space-around',
+        paddingVertical: 12,
+    },
+    tabItem: {
+        width: 70,
+        height: 12,
         borderRadius: 6,
-        marginBottom: 10
     },
 
+    /* CARD */
+    card: {
+        backgroundColor: '#fff',
+        marginHorizontal: 14,
+        marginTop: 14,
+        padding: 16,
+        borderRadius: 14,
+        elevation: 3,
+    },
+
+    /* TIMELINE */
+    timelineRow: {
+        flexDirection: 'row',
+        marginBottom: 18,
+    },
+    timelineLeft: {
+        width: 22,
+        alignItems: 'center',
+    },
     timelineDot: {
-        width: 12,
+        width: 11,
+        height: 11,
+        borderRadius: 6,
+    },
+    timelineLine: {
+        width: 2,
+        flex: 1,
+        backgroundColor: '#e2d9f8',
+        marginTop: 2,
+    },
+    timelineBadge: {
+        width: 120,
+        height: 14,
+        borderRadius: 10,
+        marginBottom: 8,
+    },
+    timelineText: {
+        width: '90%',
         height: 12,
         borderRadius: 6,
-        marginTop: 4
-    }
+        marginBottom: 6,
+    },
+    timelineTextShort: {
+        width: '60%',
+        height: 12,
+        borderRadius: 6,
+        marginBottom: 6,
+    },
+    timelineDate: {
+        width: 100,
+        height: 10,
+        borderRadius: 6,
+        marginTop: 4,
+    },
+
+    /* ABOUT GRID */
+    infoPair: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 10,
+    },
+    infoItem: {
+        width: '48%',
+        height: 40,
+        borderRadius: 6,
+    },
+    rowDivider: {
+        height: 1,
+        backgroundColor: '#f1f5f9',
+        marginVertical: 8,
+    },
+
+    /* CONTACT */
+    contactRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    contactIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        marginRight: 12,
+    },
+    contactLineSm: {
+        width: '40%',
+        height: 10,
+        borderRadius: 6,
+        marginBottom: 6,
+    },
+    contactLineLg: {
+        width: '70%',
+        height: 12,
+        borderRadius: 6,
+    },
+    actionBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        marginLeft: 8,
+    },
 });

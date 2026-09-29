@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     View, Text, StyleSheet, SafeAreaView, ScrollView,
-    StatusBar, TouchableOpacity, Image, BackHandler, Modal
+    StatusBar, TouchableOpacity, Image, BackHandler, Modal,
+    ActivityIndicator
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { API, Colors, Fonts } from './Commoncomponent/Constants';
@@ -10,6 +11,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Followups from './Users/Followups';
 import NotificationModal from './NotificationModal';
+import ShortcutsModal from './Leads/ShortcutsModal';
+import Feather from 'react-native-vector-icons/Feather';
+import CoordinatorDashboard from './Coordinator/CoordinatorDashboard';
+import PhotographerDashboard from './photographer/PhotographerDashboard';
+import Editordashboard from './Editor/Editordashboard';
+import PhotoVideoDashboard from './Photovideo/photovideodashboard';
+import ShootSchedule from './ShootSchedule';
+import CoordinationSummary from './Summary/CoordinationSummary';
+import EditingSummary from './Summary/EditingSummary';
+
 
 
 
@@ -58,68 +69,75 @@ const Dashboard = ({ navigation }) => {
     const [logoutModal, setLogoutModal] = useState(false);
     const [exitModal, setExitModal] = useState(false);
     const [userType, setUserType] = useState('');
+    const [userTypeLoaded, setUserTypeLoaded] = useState(false);
     const [greeting, setGreeting] = useState('');
     const [notificationModal, setNotificationModal] = useState(false);
     const [statsData, setStatsData] = useState({});
     const [notificationCount, setNotificationCount] = useState(0);
+    const [shortcutsModal, setShortcutsModal] = useState(false);
+    const [activeTopTab, setActiveTopTab] = useState('shoots'); // shoots | followup | coordination | editing
+
+    const [topCounts, setTopCounts] = useState({
+        shoots: 0,
+        followup: 0,
+        coordination: 0,
+        editing: 0,
+    });
+
+    const topTabs = [
+        { key: 'shoots', label: 'Upcoming\nShoots', icon: 'camera-outline' },
+        { key: 'followup', label: 'Follow Up', icon: 'phone-message-outline' },
+        { key: 'coordination', label: 'Coordination', icon: 'account-group-outline' },
+        { key: 'editing', label: 'Editing\nSummary', icon: 'movie-edit-outline' },
+    ];
+    const isSpecialUser =
+        userType === 'Coordinator' ||
+        userType === 'Photographer' ||
+        userType === 'Coordinator → Editor' ||
+        userType === 'Video Editor' ||
+        userType === 'Photo Editor';
 
 
 
     // Dashboard.js — statsItems mein navParams add karo
     const statsItems = [
         {
-            label: 'Follow Up',
-            value: statsData.today_total,
+            label: "Today's Follow-ups", value: statsData.today, icon: 'phone-in-talk-outline', color: '#F59E0B',
             navParams: { follow_status: 'todays_follow', type: '', status: [] }
         },
+        { label: "Tomorrow's Follow-ups", value: statsData.tomorrow, icon: 'calendar-arrow-right', color: '#3B82F6' },
+        { label: 'Past Due', value: statsData.past_due, icon: 'alert-outline', color: '#EF4444' },
+        { label: 'Total Follow-ups', value: statsData.total_followups, icon: 'clipboard-list-outline', color: '#16A34A' },
         {
-            label: 'Hot',
-            value: statsData.hot_total,
+            label: 'Hot (Today)', value: statsData.hot_today, icon: 'fire', color: '#EF4444',
             navParams: { follow_status: 'todays_follow', type: 'hot', status: [] }
         },
         {
-            label: 'Warm',
-            value: statsData.warm_total,
+            label: 'Warm (Today)', value: statsData.warm_today, icon: 'thermometer', color: '#F59E0B',
             navParams: { follow_status: 'todays_follow', type: 'warm', status: [] }
         },
         {
-            label: 'Cold',
-            value: statsData.cold_total,
+            label: 'Cold (Today)', value: statsData.cold_today, icon: 'snowflake', color: '#3B82F6',
             navParams: { follow_status: 'todays_follow', type: 'cold', status: [] }
         },
         {
-            label: 'Total Leads',
-            value: statsData.total,
+            label: 'Total Leads', value: statsData.total_leads, icon: 'account-group-outline', color: '#6366F1',
             navParams: { follow_status: '', type: '', status: [] }
         },
         {
-            label: 'Pending\nPre/Enquiry',
-            value: statsData.Pending,
+            label: 'Pending Pre/Enquiry', value: statsData.pending, icon: 'timer-sand', color: '#F59E0B',
             navParams: { follow_status: '', type: '', status: ['Pending'] }
         },
         {
-            label: 'Unresponsive',
-            value: statsData.Unresponsive,
-            navParams: { follow_status: '', type: '', status: ['Unresponsive'] }
-        },
-        {
-            label: 'Follow-up',
-            value: statsData.Follow_up,
+            label: 'Follow-up', value: statsData.follow_up, icon: 'sync', color: '#0EA5E9',
             navParams: { follow_status: '', type: '', status: ['Follow-up'] }
         },
         {
-            label: 'Quotation\nSent',
-            value: statsData.Quotation_Sent,
-            navParams: { follow_status: '', type: '', status: ['Quotation Sent'] }
-        },
-        {
-            label: 'Converted\nto Client',
-            value: statsData.Converted_to_Client,
+            label: 'Converted to Client', value: statsData.converted, icon: 'check-circle-outline', color: '#16A34A',
             navParams: { follow_status: '', type: '', status: ['Converted to Client'] }
         },
         {
-            label: 'End',
-            value: statsData.total_end,
+            label: 'End', value: statsData.end, icon: 'close-circle-outline', color: '#8B5CF6',
             navParams: { follow_status: '', type: '', status: ['End'] }
         },
     ];
@@ -139,6 +157,7 @@ const Dashboard = ({ navigation }) => {
 
     const handleLogout = async () => {
         await AsyncStorage.removeItem('id');
+        await AsyncStorage.removeItem('user_name');
         setLogoutModal(false);
         navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
     };
@@ -170,7 +189,7 @@ const Dashboard = ({ navigation }) => {
             });
 
             const result = await res.json();
-            console.log("Notification Count:", result);
+
 
             if (result.success) {
                 setNotificationCount(result.count || 0);
@@ -200,6 +219,9 @@ const Dashboard = ({ navigation }) => {
             }
         } catch (e) {
             setUserType('');
+
+        } finally {
+            setUserTypeLoaded(true);
         }
     };
 
@@ -207,31 +229,118 @@ const Dashboard = ({ navigation }) => {
         try {
             const userId = await AsyncStorage.getItem('id');
 
-            const res = await fetch(API.counting, {
+            const res = await fetch(API.dashboard_api, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ admin_id: userId })
+                body: JSON.stringify({ admin_id: userId, tab: 'followups' })
             });
 
             const result = await res.json();
 
             if (result.status) {
-                setStatsData(result.data);
+                const c = result.counts || {};
+                setStatsData(c);
+                setTopCounts(prev => ({ ...prev, followup: Number(c.total_followups) || 0 }));
             }
         } catch (e) {
             console.log('Stats API error:', e);
         }
     };
 
+    const fetchTopCounts = async () => {
+        try {
+            const userId = (await AsyncStorage.getItem('id')) || '';
+            const post = (url, body) =>
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                })
+                    .then(r => r.json())
+                    .catch(() => null);
+
+            const [shoot, coord, edit] = await Promise.all([
+                post(API.dashboard_api, { admin_id: userId, tab: 'shoots' }),
+                post(API.coordination_next_days, { coordinator_id: userId }),
+                post(API.dashboard_api, { admin_id: userId, tab: 'editing' }),
+            ]);
+
+            setTopCounts(prev => ({
+                ...prev,
+                shoots:
+                    (Number(shoot?.counts?.today) || 0) +
+                    (Number(shoot?.counts?.tomorrow) || 0) +
+                    (Number(shoot?.counts?.upcoming) || 0),
+                coordination: Number(coord?.count?.total) || 0,
+                editing: Number(edit?.counts?.active_projects) || 0,
+            }));
+        } catch (e) {
+            console.log('Top counts error:', e);
+        }
+    };
+
     useFocusEffect(
         useCallback(() => {
+            setUserTypeLoaded(false);
             fetchUserType();
             fetchStats();
             fetchNotificationCount();
+            fetchTopCounts();
         }, [])
     );
 
     const getFilteredMenu = () => {
+
+
+        // PHOTOGRAPHER
+        if (userType === 'Photographer') {
+            return [
+                {
+                    name: 'Dashboard',
+                    icon: 'camera-outline',
+                    color: '#0EA5E9',
+                    screen: 'PhotographerDashboard'
+                },
+                {
+                    name: 'My Assignments',
+                    icon: 'camera-account',
+                    color: '#0284C7',
+                    screen: 'Myassignments'
+                }
+            ];
+        }
+
+        // EDITOR
+        if (userType === 'Coordinator → Editor') {
+            return [
+                {
+                    name: 'Dashboard',
+                    icon: 'view-dashboard-outline',
+                    color: '#7C3AED',
+                    screen: 'Editordashboard'
+                },
+                {
+                    name: 'Booking Task',
+                    icon: 'clipboard-text-outline',
+                    color: '#0284C7',
+                    screen: 'BookingTask'
+                },
+            ];
+        }
+
+        // ── VIDEO EDITOR + PHOTO EDITOR ──
+        // if (userType === 'Video Editor' || userType === 'Photo Editor') {
+        //     return [
+
+        //         {
+        //             name: 'My Editing Task',
+        //             icon: 'movie-edit-outline',
+        //             color: '#7C3AED',
+        //             screen: 'MyEditingTask'
+        //         },
+        //     ];
+        // }
+
         if (userType === 'Sales-Person') {
             return menuItems.filter(item =>
                 ['Lead Transfer', 'Leads', 'Reports', 'Manage Booking'].includes(item.name)
@@ -267,6 +376,21 @@ const Dashboard = ({ navigation }) => {
                 shadowRadius: 6,
                 shadowOffset: { width: 0, height: 2 },
             }}>
+            {!!item.icon && (
+                <View
+                    style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 8,
+                        backgroundColor: `${item.color || '#6366F1'}18`,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 5,
+                    }}
+                >
+                    <Icon name={item.icon} size={15} color={item.color || '#6366F1'} />
+                </View>
+            )}
             <View style={{ height: 25, justifyContent: 'center', alignItems: 'center' }}>
                 <Text numberOfLines={2} style={{
                     fontSize: 10,
@@ -294,7 +418,7 @@ const Dashboard = ({ navigation }) => {
     const arrowStyle = (side) => ({
         position: 'absolute',
         [side]: -8,
-        top: 20,
+        top: 40,
         bottom: 0,
         zIndex: 10,
         width: 24,
@@ -377,6 +501,33 @@ const Dashboard = ({ navigation }) => {
     };
 
 
+    /* ── LOADING (user type pata nahi chala abhi) ── */
+    if (!userTypeLoaded) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <StatusBar backgroundColor={Colors.buttonbgcolor} barStyle="light-content" />
+                <ActivityIndicator size="large" color={Colors.buttonbgcolor} />
+            </SafeAreaView>
+        );
+    }
+
+    /* ── COORDINATOR: seedha CoordinatorDashboard dikhao ── */
+    if (userType === 'Coordinator') {
+        return <CoordinatorDashboard hideBack />;
+    }
+
+    /* ── PHOTOGRAPHER: seedha PhotographerDashboard dikhao ── */
+    if (userType === 'Photographer') {
+        return <PhotographerDashboard hideBack />;
+    }
+    /* ── EDITOR: seedha Editordashboard dikhao ── */  {/* ✅ NEW */ }
+    if (userType === 'Coordinator → Editor') {
+        return <Editordashboard hideBack />;
+    }
+
+    if (userType === 'Photo Editor' || userType === 'Video Editor') {
+        return <PhotoVideoDashboard hideBack />;
+    }
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar backgroundColor={Colors.buttonbgcolor} barStyle="light-content" />
@@ -406,17 +557,32 @@ const Dashboard = ({ navigation }) => {
                     <Text style={styles.userTypeText}>{userType || 'User'}</Text>
                     <Text style={styles.welcomeText}>Welcome to Shivay Dashboard</Text>
                 </View>
-                <TouchableOpacity
-                    style={styles.bellBtn}
-                    onPress={() => setNotificationModal(true)}
-                >
-                    <Icon name="bell-outline" size={20} color="#fff" />
+                {!isSpecialUser && (
+                    <TouchableOpacity
+                        onPress={() => setShortcutsModal(true)}
+                        style={{
+                            width: 38, height: 38, borderRadius: 19,
+                            backgroundColor: '#ffffff20',
+                            justifyContent: 'center', alignItems: 'center',
+                        }}
+                    >
+                        <Feather name="plus" size={22} color="#fff" />
+                    </TouchableOpacity>
+                )}
+                {!isSpecialUser && (
+                    <TouchableOpacity
+                        style={styles.bellBtn}
+                        onPress={() => setNotificationModal(true)}
+                    >
+                        <Icon name="bell-outline" size={20} color="#fff" />
 
-                    {/* 🔥 Badge */}
-                    <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{notificationCount}</Text>
-                    </View>
-                </TouchableOpacity>
+                        {/* 🔥 Badge */}
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{notificationCount}</Text>
+                        </View>
+                    </TouchableOpacity>
+                )}
+
             </View>
 
             {/* ── Body ── */}
@@ -426,64 +592,192 @@ const Dashboard = ({ navigation }) => {
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps='handled'
                 >
-                    {/* Menu Icons */}
-                    <View style={styles.menuGrid}>
-                        {getFilteredMenu().map((item, index) => (
-                            <TouchableOpacity
-                                key={index}
-                                activeOpacity={0.85}
-                                onPress={() => {
-                                    if (item.screen) navigation.navigate(item.screen);
-                                    else if (item.action === 'logout') openLogoutModal();
-                                }}
-                                style={styles.menuCard}
-                            >
-                                {item.image ? (
-                                    <Image
-                                        source={item.image}
-                                        tintColor={item.color}
-                                        style={{ width: 32, height: 32, resizeMode: 'contain' }}
-                                    />
-                                ) : (
-                                    <Icon name={item.icon} size={32} color={item.color} />
-                                )}
-                                <Text style={styles.menuLabel}>{item.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    {/* ── Leads Summary ── */}
-
-                    <View style={{ marginBottom: 5.4 }}>
-                        <Text style={{
-                            fontSize: 17,
-                            fontFamily: 'Inter-Bold',
-                            color: '#0F172A',
-                            marginBottom: 9.4,
-                            marginLeft: 2,
-                        }}>
-                            Leads Summary Today
-                        </Text>
-
-                        {/* Row 1 — First 4 (fixed grid) */}
-                        <View style={{
-                            flexDirection: 'row',
-                            gap: 9.4,
-                            marginBottom: 8.4,
-                        }}>
-                            {statsItems.slice(0, 4).map((item, index) => (
-                                <StatCard key={index} item={item} navigation={navigation} />
-                            ))}
+                    {!userTypeLoaded ? (
+                        <View style={{ paddingVertical: 60, alignItems: 'center' }}>
+                            <ActivityIndicator size="large" color={Colors.buttonbgcolor} />
                         </View>
+                    ) : (
+                        <>
+                            {/* Menu Icons */}
+                            <View style={styles.menuGrid}>
+                                {getFilteredMenu().map((item, index) => (
+                                    <TouchableOpacity
+                                        key={index}
+                                        activeOpacity={0.85}
+                                        onPress={() => {
+                                            if (item.screen) navigation.navigate(item.screen);
+                                            else if (item.action === 'logout') openLogoutModal();
+                                        }}
+                                        style={styles.menuCard}
+                                    >
+                                        {item.image ? (
+                                            <Image
+                                                source={item.image}
+                                                tintColor={item.color}
+                                                style={{ width: 32, height: 32, resizeMode: 'contain' }}
+                                            />
+                                        ) : (
+                                            <Icon name={item.icon} size={32} color={item.color} />
+                                        )}
+                                        <Text style={styles.menuLabel}>{item.name}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
 
-                        {/* Row 2 — Remaining 7 (scroll + arrows) */}
-                        <ScrollRowWithArrows items={statsItems.slice(4)} />
-                    </View>
+                            {/* ── Leads Summary ── */}
+                            {/* {!isSpecialUser && (
+                                <>
+                                    <View style={{ marginBottom: 5.4 }}>
+                                        <Text style={{
+                                            fontSize: 17,
+                                            fontFamily: 'Inter-Bold',
+                                            color: '#0F172A',
+                                            marginBottom: 9.4,
+                                            marginLeft: 2,
+                                        }}>
+                                            Leads Summary Today
+                                        </Text>
 
-                    {/* ── Follow Ups Card ── */}
-                    <Followups />
+                                    
+                                        <View style={{
+                                            flexDirection: 'row',
+                                            gap: 9.4,
+                                            marginBottom: 8.4,
+                                        }}>
+                                            {statsItems.slice(0, 4).map((item, index) => (
+                                                <StatCard key={index} item={item} navigation={navigation} />
+                                            ))}
+                                        </View>
 
-                    <View style={{ height: 20 }} />
+                                    
+                                        <ScrollRowWithArrows items={statsItems.slice(4)} />
+                                    </View>
+
+                                </>
+                            )} */}
+
+                            {/* ── Follow Ups Card ── */}
+                            {/* {!isSpecialUser && (
+                                <>
+
+                                    <Followups />
+                                    <ShootSchedule />
+                                    <View style={{ height: 20 }} />
+                                </>
+                            )} */}
+
+                            {/* ── TOP TABS + CONTENT ── */}
+                            {!isSpecialUser && (
+                                <>
+                                    {/* TAB BAR */}
+                                    <View style={{ flexDirection: 'row', marginBottom: 12, gap: 6 }}>
+                                        {topTabs.map(tab => {
+                                            const active = activeTopTab === tab.key;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={tab.key}
+                                                    activeOpacity={0.8}
+                                                    onPress={() => setActiveTopTab(tab.key)}
+                                                    style={{
+                                                        flex: 1,
+                                                        minHeight: 54,
+                                                        borderRadius: 12,
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        paddingHorizontal: 2,
+                                                        backgroundColor: active ? Colors.buttonbgcolor : '#FFFFFF',
+                                                        elevation: active ? 3 : 1,
+                                                        shadowColor: '#000',
+                                                        shadowOpacity: 0.06,
+                                                        shadowRadius: 4,
+                                                    }}
+                                                >
+                                                    <View
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: 3,
+                                                            right: 3,
+                                                            minWidth: 20,
+                                                            height: 17,
+                                                            borderRadius: 9,
+                                                            paddingHorizontal: 5,
+                                                            backgroundColor: active ? '#FFFFFF' : '#EF4444',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                        }}
+                                                    >
+                                                        <Text
+                                                            numberOfLines={1}
+                                                            style={{
+                                                                fontSize: 9,
+                                                                fontFamily: 'Inter-Bold',
+                                                                color: active ? Colors.buttonbgcolor : '#FFFFFF',
+                                                            }}
+                                                        >
+                                                            {topCounts[tab.key] ?? 0}
+                                                        </Text>
+                                                    </View>
+                                                    <Icon name={tab.icon} size={17} color={active ? '#FFFFFF' : '#64748B'} />
+                                                    <Text
+                                                        numberOfLines={2}
+                                                        style={{
+                                                            fontSize: 9.5,
+                                                            marginTop: 3,
+                                                            textAlign: 'center',
+                                                            fontFamily: 'Inter-Bold',
+                                                            color: active ? '#FFFFFF' : '#64748B',
+                                                        }}
+                                                    >
+                                                        {tab.label}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+
+                                    {/* 1. UPCOMING SHOOTS */}
+                                    {activeTopTab === 'shoots' && <ShootSchedule />}
+
+                                    {/* 2. FOLLOW UP = Leads Summary counts + Followups */}
+                                    {activeTopTab === 'followup' && (
+                                        <>
+                                            <View style={{ marginBottom: 5.4 }}>
+                                                {/* <Text
+                                                    style={{
+                                                        fontSize: 17,
+                                                        fontFamily: 'Inter-Bold',
+                                                        color: '#0F172A',
+                                                        marginBottom: 9.4,
+                                                        marginLeft: 2,
+                                                    }}
+                                                >
+                                                    Leads Summary Today
+                                                </Text> */}
+
+                                                <View style={{ flexDirection: 'row', gap: 9.4, marginBottom: 8.4 }}>
+                                                    {statsItems.slice(0, 4).map((item, index) => (
+                                                        <StatCard key={index} item={item} navigation={navigation} />
+                                                    ))}
+                                                </View>
+
+                                                <ScrollRowWithArrows items={statsItems.slice(4)} />
+                                            </View>
+
+                                            <Followups />
+                                        </>
+                                    )}
+
+                                    {/* 3. COORDINATION */}
+                                    {activeTopTab === 'coordination' && <CoordinationSummary />}
+
+                                    {/* 4. EDITING SUMMARY */}
+                                    {activeTopTab === 'editing' && <EditingSummary />}
+
+                                    <View style={{ height: 20 }} />
+                                </>
+                            )}
+                        </>
+                    )}
                 </ScrollView>
             </View>
 
@@ -525,6 +819,11 @@ const Dashboard = ({ navigation }) => {
             <NotificationModal
                 visible={notificationModal}
                 onClose={() => setNotificationModal(false)}
+            />
+            <ShortcutsModal
+                visible={shortcutsModal}
+                onClose={() => setShortcutsModal(false)}
+                navigation={navigation}
             />
         </SafeAreaView>
     );
@@ -586,7 +885,7 @@ const styles = StyleSheet.create({
     // Menu Grid
     menuGrid: {
         flexDirection: 'row', flexWrap: 'wrap',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start', gap: 15
     },
     menuCard: {
         width: '30%', backgroundColor: '#FFFFFF',
@@ -647,7 +946,7 @@ const styles = StyleSheet.create({
     },
     badgeText: {
         color: '#fff',
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: 'bold'
     }
 });

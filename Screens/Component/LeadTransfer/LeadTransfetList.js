@@ -742,6 +742,15 @@ const LeadTransferList = ({ navigation }) => {
                     <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => { setFromModal(false); setFromSearch(''); }}>
                         <View style={s.modalCard} onStartShouldSetResponder={() => true}>
                             <Text style={s.modalTitle}>Select From Staff</Text>
+                            <TouchableOpacity style={{
+                                position: 'absolute',
+                                top: 10,
+                                right: 10,
+                                zIndex: 10,
+                                padding: 6,
+                            }} onPress={() => setFromModal(false)}>
+                                <Icon name="close" size={20} color="#64748b" />
+                            </TouchableOpacity>
                             <View style={s.searchRow}>
                                 <Icon name="magnify" size={18} color="#94a3b8" />
                                 <TextInput
@@ -787,6 +796,15 @@ const LeadTransferList = ({ navigation }) => {
                     <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => { setToModal(false); setToSearch(''); }}>
                         <View style={s.modalCard} onStartShouldSetResponder={() => true}>
                             <Text style={s.modalTitle}>Select To Staff</Text>
+                            <TouchableOpacity style={{
+                                position: 'absolute',
+                                top: 10,
+                                right: 10,
+                                zIndex: 10,
+                                padding: 6,
+                            }} onPress={() => setToModal(false)}>
+                                <Icon name="close" size={20} color="#64748b" />
+                            </TouchableOpacity>
 
                             <View style={s.searchRow}>
                                 <Icon name="magnify" size={18} color="#94a3b8" />
@@ -871,7 +889,7 @@ const LeadTransferList = ({ navigation }) => {
                                 <View style={{ marginTop: 12 }}>
                                     <Text style={s.filterLabel}>City</Text>
                                     <TouchableOpacity style={s.filterDropdown} onPress={() => setCityModal(true)}>
-                                        <Text style={[s.filterDropdownTxt, !fCity && { color: '#999' }]}>{fCity?.city_name || 'Select City'}</Text>
+                                        <Text style={[s.filterDropdownTxt, !fCity && { color: '#999' }]}>{fCity?.city_name || 'Select Branch'}</Text>
                                         <Icon name="chevron-down" size={18} color="#94a3b8" />
                                     </TouchableOpacity>
                                 </View>
@@ -894,7 +912,7 @@ const LeadTransferList = ({ navigation }) => {
                 <PickerModal visible={sourceModal} onClose={() => setSourceModal(false)} title="Select Source" data={sources} selected={fSource?.source_id} onSelect={setFSource} keyField="source_id" labelField="source_name" />
                 <PickerModal visible={purposeModal} onClose={() => setPurposeModal(false)} title="Select Purpose" data={purposes} selected={fPurpose?.purpose_id} onSelect={setFPurpose} keyField="purpose_id" labelField="purpose_name" />
                 <PickerModal visible={statusPickerVisible} onClose={() => setStatusPickerVisible(false)} title="Select Status" data={STATUS_OPTIONS} selected={fStatus?.value} onSelect={setFStatus} keyField="value" labelField="label" searchEnabled={false} />
-                <PickerModal visible={cityModal} onClose={() => setCityModal(false)} title="Select City" data={cities} selected={fCity?.city_id} onSelect={setFCity} keyField="city_id" labelField="city_name" />
+                <PickerModal visible={cityModal} onClose={() => setCityModal(false)} title="Select Branch" data={cities} selected={fCity?.city_id} onSelect={setFCity} keyField="city_id" labelField="city_name" />
 
                 {/* ── TRANSFER CONFIRM MODAL ── */}
                 <Modal visible={transferModal} transparent animationType="fade">

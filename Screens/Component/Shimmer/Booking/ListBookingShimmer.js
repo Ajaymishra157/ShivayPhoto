@@ -3,9 +3,15 @@ import { View, StyleSheet } from 'react-native';
 import ShimmerPlaceholder from 'react-native-shimmer-placeholder';
 import LinearGradient from 'react-native-linear-gradient';
 
+/*
+  NOTE: Stage-chips row aur count-text ka shimmer yahan se hata diya hai.
+  Wo real tabs already Bookinglist.js me upar (loading ke bahar) render ho rahe
+  hain, isliye unka duplicate shimmer dikhana galat lag raha tha.
+  Ab ye component sirf list-cards ka shimmer dikhayega.
+*/
 const ListBookingShimmer = () => {
     return (
-        <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
+        <View style={{ paddingHorizontal: 12, paddingTop: 4 }}>
             {[1, 2, 3, 4, 5].map((item) => (
                 <View key={item} style={styles.card}>
 
@@ -23,17 +29,29 @@ const ListBookingShimmer = () => {
                         />
                     </View>
 
-                    {/* INDEX */}
-                    <ShimmerPlaceholder
-                        LinearGradient={LinearGradient}
-                        style={styles.smallText}
-                    />
+                    {/* INDEX + ORDER NO */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <ShimmerPlaceholder
+                            LinearGradient={LinearGradient}
+                            style={styles.smallText}
+                        />
+                        <ShimmerPlaceholder
+                            LinearGradient={LinearGradient}
+                            style={[styles.smallText, { width: 60, marginLeft: 8 }]}
+                        />
+                    </View>
 
-                    {/* NAME */}
-                    <ShimmerPlaceholder
-                        LinearGradient={LinearGradient}
-                        style={styles.text}
-                    />
+                    {/* NAME + STAGE BADGE */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                        <ShimmerPlaceholder
+                            LinearGradient={LinearGradient}
+                            style={[styles.text, { width: '50%', marginTop: 0 }]}
+                        />
+                        <ShimmerPlaceholder
+                            LinearGradient={LinearGradient}
+                            style={styles.stageBadge}
+                        />
+                    </View>
 
                     {/* MOBILE */}
                     <ShimmerPlaceholder
@@ -41,7 +59,7 @@ const ListBookingShimmer = () => {
                         style={styles.text}
                     />
 
-                    {/* EMAIL */}
+                    {/* ADDRESS */}
                     <ShimmerPlaceholder
                         LinearGradient={LinearGradient}
                         style={styles.text}
@@ -82,7 +100,6 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 6,
     },
 
-    /* 🔥 NEW ARROW */
     arrowWrapper: {
         position: 'absolute',
         right: 5,
@@ -102,7 +119,13 @@ const styles = StyleSheet.create({
         width: 40,
         height: 10,
         borderRadius: 4,
-        marginBottom: 8,
+    },
+
+    stageBadge: {
+        width: 90,
+        height: 16,
+        borderRadius: 10,
+        marginLeft: 8,
     },
 
     text: {

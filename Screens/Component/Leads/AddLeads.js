@@ -9,6 +9,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { API, Colors, Fonts } from '../Commoncomponent/Constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /* ─────────────────────────────────────────────
    STATIC DATA
@@ -51,7 +52,13 @@ const PickerModal = ({
                 onPress={onClose}
             >
                 <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
-                    <Text style={styles.modalTitle}>{title}</Text>
+                    {/* ✅ TITLE ROW WITH CROSS BUTTON */}
+                    <View style={styles.modalTitleRow}>
+                        <Text style={styles.modalTitleNew}>{title}</Text>
+                        <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
+                            <Icon name="close" size={20} color="#64748b" />
+                        </TouchableOpacity>
+                    </View>
 
                     {searchEnabled && (
                         <View style={styles.searchRow}>
@@ -122,9 +129,16 @@ const AddInlineModal = ({ visible, onClose, title, onAdd, loading }) => {
             <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
                 <View style={[styles.modalCard, { paddingHorizontal: 16, paddingBottom: 20 }]}
                     onStartShouldSetResponder={() => true}>
-                    <Text style={styles.modalTitle}>Add {title}</Text>
 
-                    <Text style={styles.fieldLabel}>{title} Name <Text style={{ color: 'red' }}>*</Text></Text>
+                    {/* ✅ TITLE ROW WITH CROSS BUTTON */}
+                    <View style={[styles.modalTitleRow, { marginHorizontal: -16 }]}>
+                        <Text style={styles.modalTitleNew}>Add {title}</Text>
+                        <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
+                            <Icon name="close" size={20} color="#64748b" />
+                        </TouchableOpacity>
+                    </View>
+
+                    <Text style={[styles.fieldLabel, { marginTop: 14 }]}>{title} Name <Text style={{ color: 'red' }}>*</Text></Text>
                     <TextInput
                         value={name}
                         onChangeText={t => { setName(t); if (t) setErr(''); }}
@@ -191,6 +205,9 @@ const DropdownBtn = ({ label, value, onPress, disabled, error }) => (
 const AddLeads = ({ navigation, route }) => {
     const editLead = route?.params?.lead || null;
     const isEdit = route?.params?.isEdit || false;
+    const preSelectedStatus = route?.params?.preSelectedStatus || null;
+
+
 
     // Form fields
     const [name, setName] = useState(editLead?.name || '');
@@ -236,6 +253,12 @@ const AddLeads = ({ navigation, route }) => {
     const [showPicker1, setShowPicker1] = useState(false);
     const [showPicker2, setShowPicker2] = useState(false);
 
+    const [followUpDate, setFollowUpDate] = useState(null);
+    const [followUpTime, setFollowUpTime] = useState(null);
+    const [followUpNotes, setFollowUpNotes] = useState('');
+    const [showFollowUpPicker, setShowFollowUpPicker] = useState(false);
+    const [showFollowUpTimePicker, setShowFollowUpTimePicker] = useState(false);
+
     // Errors
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
@@ -247,8 +270,16 @@ const AddLeads = ({ navigation, route }) => {
         fetchStates();
     }, []);
 
+    // useEffect mein add karo
+    useEffect(() => {
+        if (preSelectedStatus) {
+            setSelectedStatus(preSelectedStatus);
+        }
+    }, []);
+
     useEffect(() => {
         if (isEdit && editLead) {
+            console.log('EDIT LEAD DATA:', editLead);
 
             setName(editLead.name || '');
             setEmail(editLead.email || '');
@@ -297,12 +328,35 @@ const AddLeads = ({ navigation, route }) => {
 
             // Dates
             if (editLead.event_date) {
-                setEventDate(new Date(editLead.event_date));
+                const d = parseValidDate(editLead.event_date);
+                if (d) setEventDate(d);   // ✅ CHANGE — sirf valid date par hi set hoga
             }
 
             if (editLead.event_date2) {
-                setEventDate2(new Date(editLead.event_date2));
+                const d = parseValidDate(editLead.event_date2);
+                if (d) setEventDate2(d);   // ✅ CHANGE
             }
+
+            // DATE FIX
+            if (editLead.follow_up_date) {
+                const d = parseValidDate(editLead.follow_up_date);
+                if (d) setFollowUpDate(d);   // ✅ CHANGE
+            }
+
+
+            // TIME FIX
+            // TIME FIX
+            if (editLead.follow_up_time && editLead.follow_up_time !== '00:00:00' && editLead.follow_up_time !== '') {
+                const [h, m] = editLead.follow_up_time.split(':');
+                if (h !== undefined && m !== undefined && !isNaN(parseInt(h)) && !isNaN(parseInt(m))) {
+                    const d = new Date();
+                    d.setHours(parseInt(h));
+                    d.setMinutes(parseInt(m));
+                    d.setSeconds(0);
+                    setFollowUpTime(d);
+                }
+            }
+            if (editLead.follow_up_notes) setFollowUpNotes(editLead.follow_up_notes);
         }
     }, [editLead]);
 
@@ -455,6 +509,16 @@ const AddLeads = ({ navigation, route }) => {
         return `${dd}-${mm}-${yyyy}`;
     };
 
+    /* ── Safe date parser: invalid/empty/0000-00-00 ko null return karega ── */
+    const parseValidDate = (dateStr) => {
+        if (!dateStr || dateStr === '0000-00-00' || dateStr === 'null') return null;
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        // Extra safety: year 1 ya bahut purana invalid date bhi reject karo
+        if (d.getFullYear() < 1900) return null;
+        return d;
+    };
+
     /* ── Validate ── */
     const validate = () => {
         const e = {};
@@ -467,8 +531,12 @@ const AddLeads = ({ navigation, route }) => {
             e.mobile = 'Mobile number must be 10 digits';
         }
 
+        // State validation ✅ NEW
+        if (!selectedState) e.state = 'Please select state';
         // City validation
-        if (!selectedCity) e.city = 'Please select city';
+        if (!selectedCity) {
+            e.city = selectedState ? 'Please select city' : 'Please select state first';
+        }
 
         // Purpose / Status
         if (!selectedPurpose) e.purpose = 'Please select purpose';
@@ -482,11 +550,13 @@ const AddLeads = ({ navigation, route }) => {
     const handleSave = async () => {
         if (!validate()) return;
         setSaving(true);
+        const loginuserid = await AsyncStorage.getItem('id');
         try {
             const url = isEdit ? API.update_lead : API.add_lead;
 
             const body = {
                 enquiry_id: editLead?.enquiry_id, // 👈 VERY IMPORTANT
+                added_by: loginuserid,
                 name: name.trim(),
                 mobile: mobile.trim(),
                 email: email.trim(),
@@ -501,6 +571,11 @@ const AddLeads = ({ navigation, route }) => {
                 remark: remark.trim(),
                 lead_type: selectedType?.value || '',
                 status: selectedStatus?.value || '',
+                follow_up_date: followUpDate ? formatDate(followUpDate) : '',
+                follow_up_time: followUpTime
+                    ? `${String(followUpTime.getHours()).padStart(2, '0')}:${String(followUpTime.getMinutes()).padStart(2, '0')}`
+                    : '',
+                follow_up_notes: followUpNotes.trim(),
             };
 
             const res = await fetch(url, {
@@ -514,7 +589,20 @@ const AddLeads = ({ navigation, route }) => {
                 Toast.show({ type: 'success', text1: isEdit ? 'Lead Updated Successfully' : 'Lead Added Successfully', position: 'bottom', bottomOffset: 60, visibilityTime: 2000 });
                 setTimeout(() => navigation.goBack(), 500);
             } else {
-                Toast.show({ type: 'error', text1: result.message || 'Something went wrong', position: 'bottom', bottomOffset: 60 });
+                // 👇 YAHI MAIN FIX HAI
+                if (result.message?.toLowerCase().includes('mobile')) {
+                    setErrors(prev => ({
+                        ...prev,
+                        mobile: result.message
+                    }));
+                } else {
+                    Toast.show({
+                        type: 'error',
+                        text1: result.message || 'Something went wrong',
+                        position: 'bottom',
+                        bottomOffset: 60
+                    });
+                }
             }
         } catch (_) {
             Toast.show({ type: 'error', text1: 'Network Error', position: 'bottom', bottomOffset: 60 });
@@ -558,7 +646,7 @@ const AddLeads = ({ navigation, route }) => {
                         placeholder="Enter Contact Number"
                         placeholderTextColor="#999"
                         keyboardType="phone-pad"
-                        maxLength={15}
+                        maxLength={10}
                         style={[styles.input, errors.mobile ? styles.inputError : null]}
                     />
                 </Field>
@@ -582,19 +670,20 @@ const AddLeads = ({ navigation, route }) => {
                     />
                 </Field>
 
+
                 {/* STATE */}
-                <Field label="State">
+                <Field label="State" required error={errors.state}>
                     <DropdownBtn
                         label="Select State"
                         value={selectedState?.state_name}
                         onPress={() => setStateModal(true)}
+                        error={errors.state}
                     />
                 </Field>
-
                 {/* CITY */}
                 <Field label="City" required error={errors.city}>
                     <DropdownBtn
-                        label={cityLoading ? "Loading cities..." : "Select City"}
+                        label={cityLoading ? "Loading cities..." : "Select Branch"}
                         value={selectedCity?.city_name}
                         onPress={() => { if (selectedState) setCityModal(true); }}
                         disabled={!selectedState || cityLoading}
@@ -604,8 +693,15 @@ const AddLeads = ({ navigation, route }) => {
 
                 {/* ADDRESS */}
                 <Field label="Address">
-                    <TextInput value={address} onChangeText={setAddress} placeholder="Enter Address"
-                        placeholderTextColor="#999" style={styles.input} />
+                    <TextInput
+                        value={address}
+                        onChangeText={setAddress}
+                        placeholder="Enter Address"
+                        placeholderTextColor="#999"
+                        multiline={true}
+                        numberOfLines={4}
+                        style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
+                    />
                 </Field>
 
                 {/* DESTINATION */}
@@ -660,6 +756,76 @@ const AddLeads = ({ navigation, route }) => {
                     />
                 </Field>
 
+                {selectedStatus?.value === 'Follow-up' && (
+                    <>
+                        <Text style={[styles.fieldLabel, { marginTop: 16, fontSize: 15 }]}>Follow-Up Entry</Text>
+
+                        {/* Date */}
+                        <Field label="Date">
+                            <TouchableOpacity style={styles.dateBtn} onPress={() => setShowFollowUpPicker(true)}>
+                                <Text style={[styles.dropdownText, !followUpDate && { color: '#999' }]}>
+                                    {followUpDate ? displayDate(followUpDate) : 'dd-mm-yyyy'}
+                                </Text>
+                                <Icon name="calendar-outline" size={20} color="#94a3b8" />
+                            </TouchableOpacity>
+                            {showFollowUpPicker && (
+                                <DateTimePicker
+                                    value={followUpDate || new Date()}
+                                    mode="date"
+                                    display="default"
+                                    onChange={(event, selectedDate) => {
+                                        setShowFollowUpPicker(false);
+
+                                        if (event.type === 'set' && selectedDate) {
+                                            setFollowUpDate(selectedDate);
+                                        }
+                                    }}
+                                />
+                            )}
+                        </Field>
+
+                        {/* Time */}
+                        <Field label="Time">
+                            <TouchableOpacity style={styles.dateBtn} onPress={() => setShowFollowUpTimePicker(true)}>
+                                <Text style={[styles.dropdownText, !followUpTime && { color: '#999' }]}>
+                                    {followUpTime
+                                        ? `${String(followUpTime.getHours()).padStart(2, '0')}:${String(followUpTime.getMinutes()).padStart(2, '0')}`
+                                        : '--:--'}
+                                </Text>
+                                <Icon name="clock-outline" size={20} color="#94a3b8" />
+                            </TouchableOpacity>
+                            {showFollowUpTimePicker && (
+                                <DateTimePicker
+                                    value={followUpTime || new Date()}
+                                    mode="time"
+                                    display="default"
+                                    onChange={(event, selectedTime) => {
+                                        setShowFollowUpTimePicker(false);
+
+                                        if (event.type === 'set' && selectedTime) {
+                                            setFollowUpTime(selectedTime);
+                                        }
+                                    }}
+                                />
+                            )}
+                        </Field>
+
+                        {/* Notes */}
+                        <Field label="Notes">
+                            <TextInput
+                                value={followUpNotes}
+                                onChangeText={setFollowUpNotes}
+                                placeholder="Enter Notes"
+                                placeholderTextColor="#999"
+                                multiline
+                                numberOfLines={4}
+                                textAlignVertical="top"
+                                style={[styles.input, { height: 100, paddingTop: 10 }]}
+                            />
+                        </Field>
+                    </>
+                )}
+
                 {/* LEAD TYPE */}
                 <Field label="Lead Type">
                     <DropdownBtn
@@ -671,8 +837,16 @@ const AddLeads = ({ navigation, route }) => {
 
                 {/* REMARK */}
                 <Field label="Remark">
-                    <TextInput value={remark} onChangeText={setRemark} placeholder="Enter Remark"
-                        placeholderTextColor="#999" style={styles.input} />
+                    <TextInput
+                        value={remark}
+                        onChangeText={setRemark}
+                        placeholder="Enter Remark"
+                        placeholderTextColor="#999"
+                        multiline
+                        numberOfLines={4}
+                        textAlignVertical="top"
+                        style={[styles.input, { height: 100, paddingTop: 10 }]}
+                    />
                 </Field>
 
                 {/* SAVE BUTTON */}
@@ -725,13 +899,18 @@ const AddLeads = ({ navigation, route }) => {
             />
 
             {/* State Picker */}
+            {/* State Picker */}
             <PickerModal
                 visible={stateModal}
                 onClose={() => setStateModal(false)}
                 title="Select State"
                 data={stateList}
                 selected={selectedState?.state_id}
-                onSelect={item => { setSelectedState(item); setSelectedCity(null); }}
+                onSelect={item => {
+                    setSelectedState(item);
+                    setSelectedCity(null);
+                    setErrors(p => ({ ...p, state: '' })); // ✅ NEW
+                }}
                 keyField="state_id"
                 labelField="state_name"
             />
@@ -740,7 +919,7 @@ const AddLeads = ({ navigation, route }) => {
             <PickerModal
                 visible={cityModal}
                 onClose={() => setCityModal(false)}
-                title="Select City"
+                title="Select Branch"
                 data={cityList}
                 selected={selectedCity?.city_id}
                 onSelect={item => { setSelectedCity(item); setErrors(p => ({ ...p, city: '' })); }}
@@ -905,6 +1084,30 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         borderBottomWidth: 0.5,
         borderBottomColor: '#e2e8f0',
+    },
+    modalTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        paddingLeft: 16,
+        paddingRight: 8,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#e2e8f0',
+    },
+    modalTitleNew: {
+        fontSize: 15,
+        fontFamily: Fonts.Bold,
+        color: '#1e293b',
+        flex: 1,
+    },
+    modalCloseBtn: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: '#f1f5f9',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     searchRow: {
         flexDirection: 'row',
