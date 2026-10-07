@@ -24,11 +24,18 @@ const DATE_TYPE_OPTIONS = [
     { label: 'Entry Date', value: 'entry date' },
 ];
 
-// sirf date dikhane ke liye (time nahi), month name aaye to waisa hi dikhega
 const formatDate = (s) => {
     if (!s) return '--';
     const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m ? `${m[3]}-${m[2]}-${m[1]}` : s;
+};
+
+// 🆕 booking_date valid ho to wahi, warna (null / '' / 0000-00-00) shoot_month
+const getBookingDisplay = (client) => {
+    const bd = client?.booking_date;
+    const isValid = bd && !String(bd).startsWith('0000');
+    if (isValid) return formatDate(bd);
+    return client?.shoot_month || '--';
 };
 
 
@@ -81,6 +88,7 @@ const Calendarlist = ({ navigation }) => {
     const [cityModal, setCityModal] = useState(false);
 
     const [dateType, setDateType] = useState('booking date');   // default booking date
+    const [showBothDates, setShowBothDates] = useState(false);  // 🆕 top cards se khule to dono date
     const [dateTypeModal, setDateTypeModal] = useState(false);
 
     const [salesSearch, setSalesSearch] = useState('');
@@ -222,7 +230,12 @@ const Calendarlist = ({ navigation }) => {
                 setTentativeClients(payload.tentative_records?.clients || []);
                 const map = {};
                 (payload.confirmed_bookings || []).forEach(b => {
-                    map[b.booking_date] = { total_clients: b.total_clients, clients: b.clients };
+                    map[b.booking_date] = {
+                        total_clients: b.total_clients,
+                        my_count: b.my_count ?? 0,        // 👈 NEW
+                        other_count: b.other_count ?? 0,  // 👈 NEW
+                        clients: b.clients,
+                    };
                 });
                 setConfirmedMap(map);
                 setSummary(json.summary || {});
@@ -285,6 +298,7 @@ const Calendarlist = ({ navigation }) => {
         setDetailTitle(`Booking Details : ${d}/${m}/${y}`);
         setDetailClients(filtered);
         setIsTentativeModal(false);
+        setShowBothDates(false);     // 🆕 calendar click: pehle jaisa
         setDetailModal(true);
     };
 
@@ -293,6 +307,55 @@ const Calendarlist = ({ navigation }) => {
         setDetailTitle(`Booking Details : ${MONTHS[month]} ${year}`);
         setDetailClients(filtered);
         setIsTentativeModal(true);
+        setShowBothDates(true);      // 🆕
+        setDetailModal(true);
+    };
+
+    // confirmedMap se saare confirmed clients ek list mein
+    const getAllConfirmedClients = () =>
+        Object.entries(confirmedMap).flatMap(([date, v]) =>
+            (v.clients || []).map(c => ({ ...c, booking_date: c.booking_date || date }))
+        );
+
+    const daysLeft = (dateStr) => {
+        const t = new Date(dateStr);
+        t.setHours(0, 0, 0, 0);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        return Math.round((t - now) / (1000 * 60 * 60 * 24));
+    };
+
+    const openList = (type) => {
+        const confirmed = getAllConfirmedClients();
+        let list = [];
+        let title = '';
+
+        if (type === 'total') {
+            list = [...confirmed, ...tentativeClients];
+            title = `All Bookings : ${MONTHS[month]} ${year}`;
+        } else if (type === 'confirmed') {
+            list = confirmed;
+            title = `Confirmed Bookings : ${MONTHS[month]} ${year}`;
+        } else if (type === 'next3') {
+            list = confirmed.filter(c => {
+                const d = daysLeft(c.booking_date);
+                return d >= 0 && d <= 3;
+            });
+            title = 'Next 3 Days Bookings';
+        } else if (type === 'next6') {
+            list = confirmed.filter(c => {
+                const d = daysLeft(c.booking_date);
+                return d >= 0 && d <= 6;
+            });
+            title = 'Next 6 Days Bookings';
+        }
+
+        if (cityFilter) list = list.filter(c => matchesCity(c.client_city, cityFilter));
+
+        setDetailTitle(title);
+        setDetailClients(list);
+        setIsTentativeModal(false);   // tentative wala "Update date" action sirf Tentative card mein
+        setShowBothDates(true);       // 🆕
         setDetailModal(true);
     };
 
@@ -339,6 +402,24 @@ const Calendarlist = ({ navigation }) => {
         return entry.clients.filter(c => matchesCity(c.client_city, cityFilter)).length;
     };
 
+    const isAdmin = userType === 'Admin';
+
+    const getCounts = (day) => {
+        const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const entry = confirmedMap[key];
+        if (!entry) return { my: 0, other: 0, total: 0 };
+
+        // Branch filter nahi hai to API ke counts direct use karo
+        if (!cityFilter) {
+            return { my: entry.my_count, other: entry.other_count, total: entry.total_clients };
+        }
+
+        // Branch filter laga hai to client list se dobara count karo
+        const list = entry.clients.filter(c => matchesCity(c.client_city, cityFilter));
+        const my = list.filter(c => String(c.added_by) === String(userId)).length;
+        return { my, other: list.length - my, total: list.length };
+    };
+
     const getClients = (day) => {
         const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         return confirmedMap[key]?.clients || [];
@@ -355,6 +436,17 @@ const Calendarlist = ({ navigation }) => {
 
         const [expandedKey, setExpandedKey] = useState(null);
 
+        const dateFields = showBothDates
+            ? [
+                { key: 'Entry Date', val: formatDateTime(client.entry_date) },
+                { key: 'Booking Date', val: getBookingDisplay(client) },
+            ]
+            : [
+                dateType === 'booking date'
+                    ? { key: 'Entry Date', val: formatDateTime(client.entry_date) }
+                    : { key: 'Booking Date', val: getBookingDisplay(client) },
+            ];
+
         const fields = [
             { key: 'Order No.', val: client.order_no },
             { key: 'Email', val: client.client_email || '—' },
@@ -362,9 +454,7 @@ const Calendarlist = ({ navigation }) => {
             { key: 'Purpose', val: client.client_purpose },
             { key: 'Package', val: client.client_remark || '—' },
             { key: 'Added By', val: client.added_by_name },
-            dateType === 'booking date'
-                ? { key: 'Entry Date', val: formatDateTime(client.entry_date) }
-                : { key: 'Booking Date', val: formatDate(client.booking_date || client.shoot_month) },
+            ...dateFields,
             { key: 'City', val: client.client_city },
         ];
 
@@ -618,6 +708,7 @@ const Calendarlist = ({ navigation }) => {
                                     iconColor: '#7c3aed',
                                     value: summary.total_clients ?? 0,
                                     label: 'Total',
+                                    onPress: () => openList('total'),
                                     adminOnly: false,
                                 },
                                 {
@@ -625,6 +716,7 @@ const Calendarlist = ({ navigation }) => {
                                     iconColor: '#16a34a',
                                     value: summary.confirmed_count ?? 0,
                                     label: 'Confirmed',
+                                    onPress: () => openList('confirmed'),
                                     adminOnly: false,
                                 },
                                 {
@@ -635,25 +727,22 @@ const Calendarlist = ({ navigation }) => {
                                     onPress: openTentative,
                                     adminOnly: false,
                                 },
-
-                                // ✅ NEW
                                 {
                                     icon: 'calendar-arrow-right',
                                     iconColor: '#f97316',
                                     value: summary.next_3_days_count ?? 0,
                                     label: 'Next 3 Days',
+                                    onPress: () => openList('next3'),
                                     adminOnly: false,
                                 },
-
-                                // ✅ NEW
                                 {
                                     icon: 'calendar-range',
                                     iconColor: '#0891b2',
                                     value: summary.next_6_days_count ?? 0,
                                     label: 'Next 6 Days',
+                                    onPress: () => openList('next6'),
                                     adminOnly: false,
                                 },
-
                                 {
                                     icon: 'currency-inr',
                                     iconColor: '#0d9488',
@@ -716,11 +805,7 @@ const Calendarlist = ({ navigation }) => {
                                                     justifyContent: 'center',
                                                 }}
                                             >
-                                                <Icon
-                                                    name={item.icon}
-                                                    size={15}
-                                                    color="#fff"
-                                                />
+                                                <Icon name={item.icon} size={15} color="#fff" />
                                             </View>
 
                                             <View style={{ alignItems: 'flex-end' }}>
@@ -962,6 +1047,7 @@ const Calendarlist = ({ navigation }) => {
                                 <View key={rowIdx} style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: '#e8ecf0' }}>
                                     {grid.slice(rowIdx * 7, rowIdx * 7 + 7).map((cell, colIdx) => {
                                         const count = cell.current ? getCount(cell.day) : 0;
+                                        const counts = cell.current ? getCounts(cell.day) : { my: 0, other: 0, total: 0 };
                                         const today_ = cell.current && isToday(cell.day);
                                         const hasBooking = count > 0;
                                         const dateKey = cell.current
@@ -1002,12 +1088,14 @@ const Calendarlist = ({ navigation }) => {
 
                                                 {cell.current && count > 0 && (
                                                     <View style={{
-                                                        marginTop: 4, width: 24, height: 24, borderRadius: 12,
-                                                        backgroundColor: getUrgencyColor(dateKey) || '#86efac',   // 👈 sirf badge colored
+                                                        marginTop: 4,
+                                                        minWidth: 24, height: 24, borderRadius: 12,
+                                                        paddingHorizontal: 6,
+                                                        backgroundColor: getUrgencyColor(dateKey) || '#86efac',
                                                         justifyContent: 'center', alignItems: 'center', alignSelf: 'center',
                                                     }}>
-                                                        <Text style={{ color: '#fff', fontSize: 12, fontFamily: Fonts.Bold }}>
-                                                            {count}
+                                                        <Text style={{ color: '#fff', fontSize: 11, fontFamily: Fonts.Bold }}>
+                                                            {isAdmin ? counts.total : `${counts.my}+${counts.other}`}
                                                         </Text>
                                                     </View>
                                                 )}

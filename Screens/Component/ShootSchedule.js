@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated,
+    Modal, TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,6 +22,7 @@ const TAB_ICONS = {
 };
 
 const NEXT7_COLOR = '#0EA5E9';
+const PENDING_COLOR = '#0D9488';
 
 const TABS = [
     { key: 'today', label: 'Today' },
@@ -29,7 +31,10 @@ const TABS = [
     { key: 'overdue', label: 'Overdue' },
 ];
 
-const EMPTY_COUNTS = { today: 0, tomorrow: 0, upcoming: 0, upcoming_7_days: 0, overdue: 0 };
+const EMPTY_COUNTS = {
+    today: 0, tomorrow: 0, upcoming: 0, upcoming_7_days: 0, overdue: 0,
+    pending_payments: 0,
+};
 const EMPTY_PAYLOAD = { today: [], tomorrow: [], upcoming: [], overdue: [] };
 
 /* ══════════════ Shimmer skeleton ══════════════ */
@@ -167,7 +172,12 @@ const ShootStats = ({ counts, activeTab, onChange }) => (
                 style={{ marginRight: 8 }}
             />
             {/* spacer — Overdue half-width rahe */}
-            <View style={{ flex: 1 }} />
+            <Stat
+                icon="cash-multiple"
+                color={PENDING_COLOR}
+                value={`₹${Number(counts.pending_payments ?? 0).toLocaleString('en-IN')}`}
+                label={`Pending Payments`}
+            />
         </View>
     </View>
 );
@@ -236,9 +246,101 @@ const Chip = ({ icon, label, value, color }) => (
     </View>
 );
 const getCoordinationStatus = item =>
-    (item.booking_final_status || '').toString().trim().toLowerCase() === 'done'
-        ? 'Done'
-        : item.current_stage || '-';
+    item.coordination_status || item.current_stage || '-';
+
+/* ══════════════ Branch picker modal ══════════════ */
+const BranchModal = ({ visible, onClose, list, selected, onSelect, loading }) => {
+    const [q, setQ] = useState('');
+
+    useEffect(() => { if (!visible) setQ(''); }, [visible]);
+
+    const filtered = list.filter(b =>
+        (b.label || '').toLowerCase().includes(q.toLowerCase())
+    );
+
+    return (
+        <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+            <TouchableOpacity
+                activeOpacity={1}
+                onPress={onClose}
+                style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}
+            >
+                <View
+                    style={{ backgroundColor: '#fff', borderRadius: 14, width: '85%', overflow: 'hidden' }}
+                    onStartShouldSetResponder={() => true}
+                >
+                    <View style={{
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                        paddingVertical: 12, paddingLeft: 16, paddingRight: 8,
+                        borderBottomWidth: 0.5, borderBottomColor: '#e2e8f0',
+                    }}>
+                        <Text style={{ fontSize: 15, fontFamily: 'Inter-Bold', color: '#1e293b', flex: 1 }}>
+                            Select Branch
+                        </Text>
+                        <TouchableOpacity
+                            onPress={onClose}
+                            style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#f1f5f9', justifyContent: 'center', alignItems: 'center' }}
+                        >
+                            <Icon name="close" size={20} color="#64748b" />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={{
+                        flexDirection: 'row', alignItems: 'center', margin: 10,
+                        paddingHorizontal: 12, height: 40, backgroundColor: '#f1f5f9',
+                        borderRadius: 8, gap: 8,
+                    }}>
+                        <Icon name="magnify" size={18} color="#94a3b8" />
+                        <TextInput
+                            value={q}
+                            onChangeText={setQ}
+                            placeholder="Search branch..."
+                            placeholderTextColor="#94a3b8"
+                            style={{ flex: 1, fontSize: 13, fontFamily: Fonts.Regular, color: '#1e293b', padding: 0 }}
+                        />
+                    </View>
+
+                    <ScrollView style={{ maxHeight: 300 }} keyboardShouldPersistTaps="handled">
+                        {loading ? (
+                            <Text style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontFamily: Fonts.Regular }}>
+                                Loading...
+                            </Text>
+                        ) : filtered.length === 0 ? (
+                            <Text style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontFamily: Fonts.Regular }}>
+                                No branch found
+                            </Text>
+                        ) : (
+                            filtered.map(item => {
+                                const sel = String(item.value) === String(selected);
+                                return (
+                                    <TouchableOpacity
+                                        key={String(item.value) || 'all'}
+                                        onPress={() => { onSelect(item.value); onClose(); }}
+                                        style={{
+                                            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                            paddingVertical: 13, paddingHorizontal: 20,
+                                            borderBottomWidth: 0.5, borderBottomColor: '#f1f5f9',
+                                            backgroundColor: sel ? '#f0fdf4' : '#fff',
+                                        }}
+                                    >
+                                        <Text style={{
+                                            fontSize: 14,
+                                            fontFamily: sel ? 'Inter-Bold' : Fonts.Regular,
+                                            color: sel ? '#16A34A' : '#1e293b',
+                                        }}>
+                                            {item.label}
+                                        </Text>
+                                        {sel && <Icon name="check" size={18} color="#16A34A" />}
+                                    </TouchableOpacity>
+                                );
+                            })
+                        )}
+                    </ScrollView>
+                </View>
+            </TouchableOpacity>
+        </Modal>
+    );
+};
 
 const ShootRow = ({ item, accent }) => (
     <View style={styles.card}>
@@ -288,7 +390,12 @@ const ShootSchedule = () => {
     const [counts, setCounts] = useState(EMPTY_COUNTS);
     const [payload, setPayload] = useState(EMPTY_PAYLOAD);
 
-    const fetchSchedule = useCallback(async () => {
+    const [branchList, setBranchList] = useState([{ label: 'All Branch', value: '' }]);
+    const [branchId, setBranchId] = useState('');
+    const [branchModal, setBranchModal] = useState(false);
+    const [branchLoading, setBranchLoading] = useState(false);
+
+    const fetchSchedule = useCallback(async (bId = '') => {
         try {
             setLoading(true);
             const userId = await AsyncStorage.getItem('id');
@@ -296,7 +403,11 @@ const ShootSchedule = () => {
             const res = await fetch(API.dashboard_api, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ admin_id: userId, tab: 'shoots' }),
+                body: JSON.stringify({
+                    admin_id: userId,
+                    tab: 'shoots',
+                    branch_id: bId,
+                }),
             });
 
             const result = await res.json();
@@ -306,8 +417,12 @@ const ShootSchedule = () => {
                 setCounts(c);
                 setPayload({ ...EMPTY_PAYLOAD, ...(result.payload || {}) });
 
-                if (!c.today && c.tomorrow) setActiveTab('tomorrow');
-                else if (!c.today && !c.tomorrow && c.upcoming) setActiveTab('upcoming');
+                // sabse pehle jis tab mein data ho wahi khulega
+                if (c.today) setActiveTab('today');
+                else if (c.tomorrow) setActiveTab('tomorrow');
+                else if (c.upcoming) setActiveTab('upcoming');
+                else if (c.overdue) setActiveTab('overdue');
+                else setActiveTab('today');
             }
         } catch (e) {
             console.log('Shoot Schedule API error:', e);
@@ -317,8 +432,36 @@ const ShootSchedule = () => {
     }, []);
 
     useEffect(() => {
-        fetchSchedule();
-    }, [fetchSchedule]);
+        fetchSchedule(branchId);
+    }, [fetchSchedule, branchId]);
+
+
+
+
+    useEffect(() => {
+        const fetchBranches = async () => {
+            setBranchLoading(true);
+            try {
+                const res = await fetch(API.list_branch, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                const json = await res.json();
+                if (json?.status && Array.isArray(json.payload)) {
+                    const list = json.payload.map(b => ({
+                        label: b.branch_name?.trim(),
+                        value: String(b.branch_id),
+                    }));
+                    setBranchList([{ label: 'All Branch', value: '' }, ...list]);
+                }
+            } catch (e) {
+                console.log('Branch list error:', e);
+            } finally {
+                setBranchLoading(false);
+            }
+        };
+        fetchBranches();
+    }, []);
 
     const handleTabChange = (key) => {
         if (key === activeTab) return;
@@ -348,7 +491,27 @@ const ShootSchedule = () => {
                     <View style={[styles.dash, { backgroundColor: accent }]} />
                     <Text style={[styles.headerLabel, { color: accent }]}>SHOOT SCHEDULE</Text>
                 </View>
-                <Text style={styles.title}>{titleMap[activeTab]}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <Text style={[styles.title, { marginBottom: 0, flex: 1 }]} numberOfLines={1}>
+                        {titleMap[activeTab]}
+                    </Text>
+
+                    <TouchableOpacity
+                        onPress={() => setBranchModal(true)}
+                        activeOpacity={0.8}
+                        style={{
+                            flexDirection: 'row', alignItems: 'center',
+                            backgroundColor: accent, borderRadius: 8,
+                            paddingHorizontal: 10, height: 30, maxWidth: 140, gap: 4,
+                        }}
+                    >
+                        <Icon name="map-marker-outline" size={13} color="#fff" />
+                        <Text numberOfLines={1} style={{ color: '#fff', fontSize: 11, fontFamily: 'Inter-Bold', flexShrink: 1 }}>
+                            {branchList.find(b => b.value === branchId)?.label || 'All Branch'}
+                        </Text>
+                        <Icon name="chevron-down" size={13} color="#fff" />
+                    </TouchableOpacity>
+                </View>
 
                 <ShootScheduleTabs activeTab={activeTab} onChange={handleTabChange} counts={counts} />
 
@@ -379,6 +542,14 @@ const ShootSchedule = () => {
                     </ScrollView>
                 )}
             </View>
+            <BranchModal
+                visible={branchModal}
+                onClose={() => setBranchModal(false)}
+                list={branchList}
+                selected={branchId}
+                onSelect={setBranchId}
+                loading={branchLoading}
+            />
         </View>
     );
 };

@@ -1,4 +1,4 @@
-package com.shivayphotodev
+package com.shivayphoto
 
 import android.app.Application
 import com.facebook.react.PackageList

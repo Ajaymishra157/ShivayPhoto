@@ -408,7 +408,7 @@ const BookingDetail = ({ navigation, route }) => {
                     <SectionCard title="Contact Info">
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                             <HalfRow icon="phone-outline" label="Mobile" value={data.client_mobile} />
-                            <HalfRow icon="city" label="City" value={data.client_city} />
+                            <HalfRow icon="city" label="Branch" value={data.client_city} />
                             <HalfRow icon="email-outline" label="Email" value={data.client_email} />
                             <HalfRow icon="note-text-outline" label="Purpose" value={data.client_purpose} />
                         </View>

@@ -1,4 +1,4 @@
-package com.shivayphotodev
+package com.shivayphoto
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

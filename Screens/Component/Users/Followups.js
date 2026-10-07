@@ -739,10 +739,16 @@ const Followups = () => {
                             </TouchableOpacity>
 
                             {/* Meta */}
+                            {/* Meta */}
                             <View style={styles.leadMeta}>
                                 <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
                                     <Text style={[styles.statusText, { color: sc.text }]}>{item.status}</Text>
                                 </View>
+                                {item.lead_type ? (
+                                    <View style={{ alignSelf: 'flex-end', marginBottom: 4 }}>
+                                        <LeadTypeBadge type={item.lead_type} />
+                                    </View>
+                                ) : null}
                                 <Text style={styles.leadDate}>{datePart}</Text>
                                 {timePart ? <Text style={styles.leadTime}>{timePart}</Text> : null}
                             </View>

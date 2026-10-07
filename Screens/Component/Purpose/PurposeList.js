@@ -88,7 +88,8 @@ const PurposeList = ({ navigation }) => {
         const q = text.toLowerCase();
         setFiltered(
             data.filter(i =>
-                (i.purpose_name || '').toLowerCase().includes(q)
+                (i.purpose_name || '').toLowerCase().includes(q) ||
+                (i.branch_name || '').toLowerCase().includes(q)   // 👈 NEW
             )
         );
     };
@@ -257,6 +258,20 @@ const PurposeList = ({ navigation }) => {
                         textTransform: 'capitalize'
                     }}>
                         {item.purpose_name || '--'}
+                    </Text>
+                </View>
+                {/* BRANCH */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                    <Text style={{ fontSize: 12, fontFamily: Fonts.Bold, color: '#2c3e50' }}>
+                        Branch:
+                    </Text>
+                    <Text style={{
+                        fontSize: 12,
+                        fontFamily: Fonts.Regular,
+                        color: '#7f8c8d',
+                        textTransform: 'capitalize',
+                    }}>
+                        {item.branch_name || '--'}
                     </Text>
                 </View>
 

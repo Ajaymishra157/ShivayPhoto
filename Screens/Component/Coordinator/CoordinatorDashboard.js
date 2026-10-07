@@ -74,12 +74,13 @@ const STAGES = [
 ];
 
 const STAGE_COLORS = {
+    'Pending': '#F59E0B',
     'Concept Finalized': '#0EA5E9',
     'Outfit Finalized': '#8B5CF6',
     'Props Ready': '#F59E0B',
     'Client Requirements': '#EC4899',
     'Shoot Assignment': '#6366F1',
-    Done: '#16A34A',
+    'Done': '#16A34A',
 };
 
 /* =========================================================
@@ -107,53 +108,87 @@ const formatDate = date => {
 const getStageColor = stage =>
     STAGE_COLORS[stage] || '#64748b';
 
-const getUrgencyBg = (dateStr) => {
-    if (!dateStr) return null;
+const MONTH_NAMES = [
+    'january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december',
+];
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const target = new Date(dateStr);
-    target.setHours(0, 0, 0, 0);
-
-    const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return null;          // already past — normal
-    if (diffDays <= 3) return '#fee2e2';     // 🔴 light red — urgent
-    if (diffDays <= 6) return '#ffedd5';     // 🟠 light orange — upcoming
-    return null;                             // normal
+// booking_date valid hai to Date return karo, warna null ("0000-00-00" bhi invalid)
+const parseBookingDate = dateStr => {
+    if (!dateStr || String(dateStr).startsWith('0000')) return null;
+    const d = new Date(String(dateStr).replace(' ', 'T'));
+    return Number.isNaN(d.getTime()) ? null : d;
 };
 
-const getUrgencyRank = (dateStr) => {
-    if (!dateStr) return 3; // no date — sabse last
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const target = new Date(dateStr);
-    target.setHours(0, 0, 0, 0);
-
-    if (Number.isNaN(target.getTime())) return 3; // invalid date bhi last
-
-    const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return 2;       // past — normal
-    if (diffDays <= 3) return 0;      // 🔴 urgent — top priority
-    if (diffDays <= 6) return 1;      // 🟠 upcoming — second priority
-    return 2;                         // normal — baaki sab
+// "September" -> us month ka last day (current year)
+const parseShootMonth = monthStr => {
+    const key = String(monthStr || '').trim().toLowerCase();
+    if (key.length < 3) return null;
+    const idx = MONTH_NAMES.findIndex(m => m.slice(0, 3) === key.slice(0, 3));
+    if (idx < 0) return null;
+    return new Date(new Date().getFullYear(), idx + 1, 0);
 };
 
-const isDateOverdue = dateStr => {
-    if (!dateStr) return false;
+// booking_date na ho to shoot_month use hoga
+const getEffectiveDate = item => {
+    const d = parseBookingDate(item?.booking_date) || parseShootMonth(item?.shoot_month);
+    if (!d) return null;
+    const copy = new Date(d);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+};
 
-    const target = new Date(String(dateStr).replace(' ', 'T'));
-    if (Number.isNaN(target.getTime())) return false;
+// card par dikhane wali date text
+const getDisplayDate = item => {
+    if (parseBookingDate(item?.booking_date)) return formatDate(item.booking_date);
+    if (item?.shoot_month) return item.shoot_month;
+    return '';
+};
 
+const getDiffDays = item => {
+    const target = getEffectiveDate(item);
+    if (!target) return null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    target.setHours(0, 0, 0, 0);
+    return Math.round((target - today) / (1000 * 60 * 60 * 24));
+};
 
-    return target < today; // aaj se pehle ki date = overdue
+// sirf asli booking_date ka diff (shoot_month yahan use NAHI hoga)
+const getBookingDiffDays = item => {
+    const d = parseBookingDate(item?.booking_date);
+    if (!d) return null;
+    const target = new Date(d);
+    target.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.round((target - today) / (1000 * 60 * 60 * 24));
+};
+
+const getUrgencyBg = item => {
+    const diff = getBookingDiffDays(item);
+    if (diff === null || diff < 0) return null;
+    if (diff <= 3) return '#fee2e2';   // 🔴 urgent (sirf asli booking_date)
+    if (diff <= 6) return '#ffedd5';   // 🟠 upcoming (sirf asli booking_date)
+    return null;
+};
+
+const getUrgencyRank = item => {
+    const diff = getBookingDiffDays(item);
+
+    // booking_date nahi hai
+    if (diff === null) {
+        return item?.shoot_month ? 3 : 4;   // month wale neeche, bina date wale sabse last
+    }
+
+    if (diff < 0) return 3;    // past date — red/orange ke neeche
+    if (diff <= 3) return 0;   // 🔴 sabse upar
+    if (diff <= 6) return 1;   // 🟠 uske baad
+    return 2;                  // aage ki normal dates
+};
+
+const isDateOverdue = item => {
+    const diff = getDiffDays(item);
+    return diff !== null && diff < 0;
 };
 
 /* ===== helper: map API item -> card shape (Today tab ke liye) ===== */
@@ -175,6 +210,7 @@ const callNumber = mobile => {
 const getShootStatusStyle = status => {
     switch ((status || '').toLowerCase()) {
         case 'completed':
+        case 'done':                // 👈 NEW
             return { color: '#16A34A', bg: '#DCFCE7', icon: 'check-circle' };
         case 'pending':
             return { color: '#F59E0B', bg: '#FEF3C7', icon: 'timer-sand-empty' };
@@ -263,9 +299,8 @@ const PipelineCard = memo(({ item, navigation, showUrgency }) => {
 
     const stageColor =
         getStageColor(stage);
-    const urgencyBg = showUrgency ? getUrgencyBg(item.booking_date) : null;   // 🔧 condition add
-
-    const overdue = isDateOverdue(item.booking_date);
+    const urgencyBg = showUrgency ? getUrgencyBg(item) : null;
+    const overdue = isDateOverdue(item);
 
     const openDetail = () => {
         navigation.navigate('NewCoordination', {
@@ -360,34 +395,27 @@ const PipelineCard = memo(({ item, navigation, showUrgency }) => {
                             '-'}
                     </Text>
 
-                    <View
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            marginTop: 2,
-                        }}
-                    >
-                        {item.booking_date && (
-                            <Icon
-                                name="calendar-outline"
-                                size={9}
-                                color="#94a3b8"
-                            />
-                        )}
-
-                        <Text
+                    {getDisplayDate(item) !== '' && (
+                        <View
                             style={{
-                                color: '#94a3b8',
-                                fontFamily: Fonts.Regular,
-                                fontSize: 9,
-                                marginLeft: item.booking_date ? 4 : 0,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                marginTop: 2,
                             }}
                         >
-                            {item.booking_date
-                                ? formatDate(item.booking_date)
-                                : formatDate(item.shoot_month)}
-                        </Text>
-                    </View>
+                            <Icon name="calendar-outline" size={9} color="#94a3b8" />
+                            <Text
+                                style={{
+                                    color: '#94a3b8',
+                                    fontFamily: Fonts.Regular,
+                                    fontSize: 9,
+                                    marginLeft: 4,
+                                }}
+                            >
+                                {getDisplayDate(item)}
+                            </Text>
+                        </View>
+                    )}
                     {overdue && (
                         <View
                             style={{
@@ -761,20 +789,9 @@ const CompletedCard = memo(({ item, navigation }) => {
                             '-'}
                     </Text>
 
-                    {(item.booking_date || item.shoot_month) && (
-                        <View
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                marginTop: 2,
-                            }}
-                        >
-                            <Icon
-                                name="calendar-outline"
-                                size={9}
-                                color="#94a3b8"
-                            />
-
+                    {getDisplayDate(item) !== '' && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                            <Icon name="calendar-outline" size={9} color="#94a3b8" />
                             <Text
                                 style={{
                                     color: '#94a3b8',
@@ -783,9 +800,7 @@ const CompletedCard = memo(({ item, navigation }) => {
                                     marginLeft: 3,
                                 }}
                             >
-                                {item.booking_date
-                                    ? formatDate(item.booking_date)
-                                    : item.shoot_month}
+                                {getDisplayDate(item)}
                             </Text>
                         </View>
                     )}
@@ -838,7 +853,7 @@ const CompletedCard = memo(({ item, navigation }) => {
                         Completed
                     </Text>
                 </View>
-                {/* {(() => {
+                {(() => {
                     const s = getShootStatusStyle(item.shoot_status);
                     return (
                         <>
@@ -878,7 +893,7 @@ const CompletedCard = memo(({ item, navigation }) => {
                             </View>
                         </>
                     );
-                })()} */}
+                })()}
             </View>
 
             {/* DETAILS */}
@@ -2408,7 +2423,7 @@ HARDWARE BACK — CONFIRM EXIT (only jab ye home screen hai)
                         newItems = json?.payload?.items || [];
                         if (activeTab === 'active') {
                             newItems = [...newItems].sort(
-                                (a, b) => getUrgencyRank(a.booking_date) - getUrgencyRank(b.booking_date)
+                                (a, b) => getUrgencyRank(a) - getUrgencyRank(b)
                             ); // 👈 NAYA — Pipeline tab ke liye bhi
                         }
                     }

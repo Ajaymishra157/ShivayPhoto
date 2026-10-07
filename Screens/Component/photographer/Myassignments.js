@@ -2456,7 +2456,7 @@ const Myassignments = () => {
 
                     {/* DETAILS */}
 
-                    {/* <TouchableOpacity
+                    <TouchableOpacity
                         activeOpacity={0.75}
                         onPress={() =>
                             navigation.navigate('NewCoordination', {
@@ -2486,7 +2486,7 @@ const Myassignments = () => {
                         </Text>
 
                         <Icon name="chevron-right" size={12} color="#6366F1" style={{ marginLeft: 3 }} />
-                    </TouchableOpacity> */}
+                    </TouchableOpacity>
                 </View>
             </View>
         );

@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, FlatList, TextInput, TouchableOpacity,
@@ -44,7 +45,12 @@ const ClampText = ({ text, style, onTruncate }) => (
 const PackageCard = ({ item, index, onMenu, onInfo }) => {
     const [nameLong, setNameLong] = useState(false);
     const [branchLong, setBranchLong] = useState(false);
+    const [purposeLong, setPurposeLong] = useState(false);
     const isActive = item.status === 'Active';
+
+
+
+
 
     const InfoBtn = () => (
         <TouchableOpacity
@@ -148,6 +154,22 @@ const PackageCard = ({ item, index, onMenu, onInfo }) => {
                     {branchLong && <InfoBtn />}
                 </View>
             </View>
+            {/* PURPOSE NAME 👈 NEW */}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 6 }}>
+                <Text style={{ fontSize: 12, fontFamily: Fonts.Bold, color: '#2c3e50', width: 62 }}>
+                    Purpose:
+                </Text>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1 }}>
+                        <ClampText
+                            text={item.purpose_name || '--'}
+                            onTruncate={setPurposeLong}
+                            style={{ fontSize: 12, fontFamily: Fonts.Regular, color: '#7f8c8d', textTransform: 'capitalize' }}
+                        />
+                    </View>
+                    {purposeLong && <InfoBtn />}
+                </View>
+            </View>
 
             {/* ENTRY DATE */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
@@ -187,9 +209,11 @@ const Listpackages = ({ navigation }) => {
         setPage(1);
     }, [search, data]);
 
+
     const matches = (i, q) =>
         (i.package_name || '').toLowerCase().includes(q) ||
-        (i.branch_name || '').toLowerCase().includes(q);
+        (i.branch_name || '').toLowerCase().includes(q) ||
+        (i.purpose_name || '').toLowerCase().includes(q);
 
     /* ================= FETCH ================= */
     const fetchPackages = async () => {
@@ -364,7 +388,7 @@ const Listpackages = ({ navigation }) => {
                 }}>
                     <Icon name="magnify" size={18} color="#94a3b8" />
                     <TextInput
-                        placeholder="Search package or branch..."
+                        placeholder="Search package, branch or purpose..."
                         value={search}
                         onChangeText={handleSearch}
                         style={{
@@ -544,6 +568,7 @@ const Listpackages = ({ navigation }) => {
 
                         <InfoRow label="Package Name" value={infoItem?.package_name} />
                         <InfoRow label="Branch" value={infoItem?.branch_name} />
+                        <InfoRow label="Purpose" value={infoItem?.purpose_name} />
                         <InfoRow label="Status" value={infoItem?.status} />
                         <InfoRow label="Entry On" value={formatDateTime(infoItem?.entry_date)} />
                     </View>

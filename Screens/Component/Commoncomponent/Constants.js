@@ -30,8 +30,8 @@ const Colors = {
 // const BASE_URL = 'https://crm.shivayphoto.com/dev/api/';
 // const BASE_URL = 'https://crm.shivayphoto.com/api/';
 
-// const BASE_URL = 'https://shivayphoto.studiomanagers.in/api/';
-const BASE_URL = 'https://shivayphoto.studiomanagers.in/dev/api/';
+const BASE_URL = 'https://shivayphoto.studiomanagers.in/api/';
+// const BASE_URL = 'https://shivayphoto.studiomanagers.in/dev/api/';
 
 
 const API = {
@@ -173,6 +173,9 @@ const API = {
   delete_package: `${BASE_URL}package/delete_package.php`,
 
   coordination_next_days: `${BASE_URL}coordination/coordination_next_days.php`,
+
+  //coordination detail ke andar shoot date update ke liye
+  // update_booking_date: `${BASE_URL}coordination/update_booking_date.php`,
 
 
 

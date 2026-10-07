@@ -103,6 +103,11 @@ const DEFAULT_PHOTOGRAPHERS = [];
 
 const NOTES_MAX = 300;
 
+const MONTH_OPTIONS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+].map(m => ({ label: m, value: m }));
+
 
 /* =========================================================
    DATE FORMAT
@@ -855,9 +860,10 @@ const NewCoordination = () => {
     const [assigningPhotographer, setAssigningPhotographer] =
         useState(false);
 
-    const [loadingDetail, setLoadingDetail] =
-        useState(false);
+    const [loadingDetail, setLoadingDetail] = useState(false);
+    const [dateChanged, setDateChanged] = useState(false);
 
+    const [monthModal, setMonthModal] = useState(false);
 
 
     const [showAllActivities, setShowAllActivities] = useState(false);
@@ -1120,10 +1126,13 @@ const NewCoordination = () => {
                 : (assign.notes || '')
         );
 
+        const validDate = (v) => (v && !String(v).startsWith('0000') ? v : null);
+
         const assignedDate =
-            assign.booking_date ||
-            b.shoot_date ||
-            b.shootDate ||
+            validDate(b.booking_date) ||
+            validDate(assign.booking_date) ||
+            validDate(b.shoot_date) ||
+            validDate(b.shootDate) ||
             null;
 
         setShootDate(getSafeDate(assignedDate));
@@ -1338,6 +1347,14 @@ const NewCoordination = () => {
     }, [apiBooking, bookingData]);
 
 
+    const onShootDateChange = (event, selected) => {
+        setShowDatePicker(false);
+        if (event.type === 'set' && selected) {
+            setShootDate(selected);
+            setShootMonth('');
+            setDateChanged(true);   // user ne date badli, update par naya API chalega
+        }
+    };
     /* =====================================================
        HANDLE STAGE CHANGE
     ===================================================== */
@@ -1366,7 +1383,7 @@ const NewCoordination = () => {
         if (newIndex < requirementsIndex) {
             setPhotographer('');
             setPhotographerId(0);
-            setShootDate(null);
+            setShootDate(null);        // ← ye line hata do
             setPhotographerNotes('');
         }
     };
@@ -1378,6 +1395,9 @@ const NewCoordination = () => {
     /* =====================================================
     COMBINED UPDATE (stage + photographer, ek hi button se)
  ===================================================== */
+    const toYMD = d =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
     const handleUpdate = async () => {
 
         if (!getClientId(bookingData)) {
@@ -1392,17 +1412,10 @@ const NewCoordination = () => {
 
         if (updatingStage || assigningPhotographer) return;
 
-        // Client Requirements stage cross ho chuka ho to prep stages ki zaroorat
-        // nahi — sirf usi case mein empty selection ka error dikhana hai.
-
-
         try {
             setUpdatingStage(true);
 
-            /* ---- 1) UPDATE STAGE API ----
-               Sirf tab hit hogi jab koi naya (abhi tak confirm na kiya gaya)
-               prep stage checked ho. Warna skip — lekin function yahan ruk
-               nahi jaata, Photographer API neeche fir bhi chalegi. */
+            /* ---- 1) UPDATE STAGE API ---- */
             const newlyCheckedStages = selectedPrepStages.filter(
                 label => !confirmedPrepStages.includes(label)
             );
@@ -1411,7 +1424,6 @@ const NewCoordination = () => {
             let stageResult = null;
 
             if (newlyCheckedStages.length) {
-
                 const stagePayload = {
                     client_id: Number(getClientId(bookingData)),
                     admin_id: adminId,
@@ -1436,20 +1448,18 @@ const NewCoordination = () => {
             }
 
             /* ---- 2) ASSIGN PHOTOGRAPHER API ----
-               Photographer select kiya ho YA sirf Client Requirements notes
-               likhe/change kiye ho — dono cases mein yeh API chalni chahiye. */
+               Photographer, notes, ya date/month change hone par chalegi */
             let photographerOk = true;
             let photographerResult = null;
 
             const trimmedNotes = photographerNotes?.trim() || '';
-            const shouldCallPhotographerApi = photographerId || trimmedNotes;   // 🔧 photographerEnabled hataya
+            const shouldCallPhotographerApi =
+                photographerId || trimmedNotes || dateChanged;
 
             if (shouldCallPhotographerApi) {
                 setAssigningPhotographer(true);
 
-                const bookingDate = shootDate
-                    ? `${shootDate.getFullYear()}-${String(shootDate.getMonth() + 1).padStart(2, '0')}-${String(shootDate.getDate()).padStart(2, '0')}`
-                    : '';
+                const bookingDate = shootDate ? toYMD(shootDate) : '';
 
                 const photographerPayload = {
                     client_id: Number(getClientId(bookingData)),
@@ -1475,11 +1485,11 @@ const NewCoordination = () => {
                     photographerResult?.status == 200 ||
                     photographerResult?.code == 200;
 
+                if (photographerOk) setDateChanged(false);
+
                 setAssigningPhotographer(false);
             }
 
-            // Agar dono hi API mein se koi bhi call nahi hui (koi nayi cheez update
-            // hi nahi ki gayi), tabhi yeh "kuch nahi hua" wala case hai.
             if (!newlyCheckedStages.length && !shouldCallPhotographerApi) {
                 Toast.show({
                     type: 'error',
@@ -1718,6 +1728,7 @@ const NewCoordination = () => {
     ===================================================== */
 
     const type = userType?.trim();
+    const isPhotographer = type === 'Photographer';
 
     return (
 
@@ -1893,9 +1904,7 @@ const NewCoordination = () => {
                                 index={index}
                                 currentStageIndex={currentStageIndex}
                                 completedStageKeys={completedStageKeys}
-                                onPress={
-                                    handleStageChange
-                                }
+                                onPress={isPhotographer ? () => { } : handleStageChange}
                             />
                         )}
                     />
@@ -2134,27 +2143,81 @@ const NewCoordination = () => {
 
                             </Text>
 
-                            <View style={st.lockedBox}>
-                                <View style={st.selectBoxInner}>
-                                    <Icon
-                                        name="calendar-blank-outline"
-                                        size={17}
-                                        color="#94a3b8"
-                                        style={{ marginRight: 7 }}
-                                    />
-                                    <Text style={st.lockedText}>
-                                        {shootDate
-                                            ? fmtDisplay(shootDate)
-                                            : shootMonth
-                                                ? shootMonth
-                                                : apiBooking?.booking_date
-                                                    ? fmtDisplay(getSafeDate(apiBooking.booking_date))
-                                                    : 'Not set'
-                                        }
-                                    </Text>
-                                </View>
-                                <Icon name="lock-outline" size={15} color="#94a3b8" />
-                            </View>
+                            {(() => {
+                                const isTentative = !shootDate && !!shootMonth;
+
+                                return (
+                                    <>
+                                        <TouchableOpacity
+                                            style={st.dateBox}
+                                            onPress={() =>
+                                                isTentative
+                                                    ? setMonthModal(true)      // tentative -> month modal
+                                                    : setShowDatePicker(true)  // asli date -> date picker
+                                            }
+                                            activeOpacity={0.8}
+                                        >
+                                            <View style={st.selectBoxInner}>
+                                                <Icon
+                                                    name={isTentative ? 'calendar-month-outline' : 'calendar-blank-outline'}
+                                                    size={17}
+                                                    color={Colors.buttonbgcolor}
+                                                    style={{ marginRight: 7 }}
+                                                />
+                                                <Text
+                                                    style={[
+                                                        st.selectText,
+                                                        !(shootDate || shootMonth || apiBooking?.booking_date) && st.selectTextPlaceholder,
+                                                    ]}
+                                                >
+                                                    {shootDate
+                                                        ? fmtDisplay(shootDate)
+                                                        : shootMonth
+                                                            ? shootMonth
+                                                            : apiBooking?.booking_date
+                                                                ? fmtDisplay(getSafeDate(apiBooking.booking_date))
+                                                                : 'Select shoot date'}
+                                                </Text>
+                                            </View>
+                                            <Icon name="chevron-down" size={17} color="#94a3b8" />
+                                        </TouchableOpacity>
+
+                                        {isTentative && (
+                                            <View
+                                                style={{
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    marginTop: 4,
+                                                }}
+                                            >
+                                                <Text style={st.disabledHint}>Tentative month — tap to change</Text>
+
+                                                <TouchableOpacity onPress={() => setShowDatePicker(true)}>
+                                                    <Text
+                                                        style={{
+                                                            fontSize: 10.5,
+                                                            fontFamily: Fonts.Bold,
+                                                            color: Colors.buttonbgcolor,
+                                                        }}
+                                                    >
+                                                        Set exact date
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
+
+                                        {showDatePicker && (
+                                            <DateTimePicker
+                                                value={shootDate || getSafeDate(apiBooking?.booking_date) || new Date()}
+                                                mode="date"
+                                                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                                onChange={onShootDateChange}
+                                            />
+                                        )}
+                                    </>
+                                );
+                            })()}
 
 
 
@@ -2309,6 +2372,42 @@ const NewCoordination = () => {
     </View>
 )}
 */}
+
+                    {isPhotographer && (
+                        <View style={st.card}>
+                            <View style={st.cardHeaderRow}>
+                                <Icon name="camera-outline" size={17} color={Colors.buttonbgcolor} />
+                                <Text style={st.cardHeaderText}>Shoot Details</Text>
+                            </View>
+
+                            <Text style={st.fieldLabelTop}>Shoot Date</Text>
+                            <View style={st.lockedBox}>
+                                <Text style={st.lockedText}>
+                                    {shootDate ? fmtDisplay(shootDate) : shootMonth || 'Not set'}
+                                </Text>
+                                <Icon name="lock-outline" size={15} color="#94a3b8" />
+                            </View>
+
+                            {/* 🆕 PACKAGE (read-only) */}
+                            <Text style={st.fieldLabelTop}>Package</Text>
+                            <TextInput
+                                value={stageNotes}
+                                editable={false}
+                                multiline
+                                placeholder="No package details"
+                                placeholderTextColor="#999"
+                                style={[st.textArea, st.textAreaLarge, st.selectBoxDisabled]}
+                            />
+
+                            <Text style={st.fieldLabelTop}>Client Requirements</Text>
+                            <TextInput
+                                value={photographerNotes}
+                                editable={false}
+                                multiline
+                                style={[st.textArea, { height: 100 }, st.selectBoxDisabled]}
+                            />
+                        </View>
+                    )}
 
                     <View style={st.card}>
 
@@ -2525,6 +2624,19 @@ const NewCoordination = () => {
 
                 </ScrollView>
             )}
+
+            <SelectModal
+                visible={monthModal}
+                onClose={() => setMonthModal(false)}
+                title="Select Shoot Month"
+                data={MONTH_OPTIONS}
+                selected={shootMonth}
+                onSelect={(m) => {
+                    setShootMonth(m);
+                    setShootDate(null);
+                    setDateChanged(true);
+                }}
+            />
 
             {/* =================================================
                STAGE MODAL

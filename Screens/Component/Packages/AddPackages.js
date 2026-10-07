@@ -97,11 +97,23 @@ const AddPackages = ({ navigation, route }) => {
         isEdit ? { branch_id: packageData.branch_id, branch_name: packageData.branch_name } : null
     );
 
+    // 👇 NAYA: Purpose (edit mode me purana purpose pehle se selected aayega)
+    const [selectedPurpose, setSelectedPurpose] = useState(
+        isEdit && packageData.purpose_id
+            ? { purpose_id: packageData.purpose_id, purpose_name: packageData.purpose_name }
+            : null
+    );
+
     const [branches, setBranches] = useState([]);
     const [branchModal, setBranchModal] = useState(false);
     const [branchLoading, setBranchLoading] = useState(false);
 
-    const [errors, setErrors] = useState({ branch: '', name: '' });
+    // 👇 NAYA
+    const [purposes, setPurposes] = useState([]);
+    const [purposeModal, setPurposeModal] = useState(false);
+    const [purposeLoading, setPurposeLoading] = useState(false);
+
+    const [errors, setErrors] = useState({ branch: '', purpose: '', name: '' });
     const [saving, setSaving] = useState(false);
 
     const showToast = (type, text1) => {
@@ -110,6 +122,7 @@ const AddPackages = ({ navigation, route }) => {
 
     useEffect(() => {
         fetchBranches();
+        fetchPurposes();
     }, []);
 
     const fetchBranches = async () => {
@@ -129,12 +142,32 @@ const AddPackages = ({ navigation, route }) => {
         }
     };
 
+    // 👇 NAYA: sirf active purposes dikhenge
+    const fetchPurposes = async () => {
+        setPurposeLoading(true);
+        try {
+            const res = await fetch(API.list_purpose);
+            const json = await res.json();
+            if (json?.code == 200 && Array.isArray(json.payload)) {
+                setPurposes(json.payload.filter(p => p.purpose_status === 'active'));
+            } else {
+                setPurposes([]);
+            }
+        } catch (e) {
+            setPurposes([]);
+            showToast('error', 'Failed to load purposes');
+        } finally {
+            setPurposeLoading(false);
+        }
+    };
+
     const validate = () => {
-        const e = { branch: '', name: '' };
+        const e = { branch: '', purpose: '', name: '' };
         if (!selectedBranch) e.branch = 'Please Select Branch';
+        if (!selectedPurpose) e.purpose = 'Please Select Purpose';
         if (!packageName.trim()) e.name = 'Please Enter Package Name';
         setErrors(e);
-        return !e.branch && !e.name;
+        return !e.branch && !e.purpose && !e.name;
     };
 
     const handleSave = async () => {
@@ -152,12 +185,14 @@ const AddPackages = ({ navigation, route }) => {
                     package_id: Number(packageData.package_id),
                     package_name: packageName.trim(),
                     branch_id: Number(selectedBranch.branch_id),
+                    purpose_id: Number(selectedPurpose.purpose_id),
                 };
             } else {
                 const loginuserid = await AsyncStorage.getItem('id');
                 body = {
                     package_name: packageName.trim(),
                     branch_id: Number(selectedBranch.branch_id),
+                    purpose_id: Number(selectedPurpose.purpose_id),
                     added_by: Number(loginuserid),
                 };
             }
@@ -220,6 +255,26 @@ const AddPackages = ({ navigation, route }) => {
                 </TouchableOpacity>
                 {!!errors.branch && <Text style={styles.errText}>{errors.branch}</Text>}
 
+                {/* PURPOSE */}
+                <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
+                    Purpose<Text style={{ color: 'red' }}> *</Text>
+                </Text>
+
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setPurposeModal(true)}
+                    style={[styles.dropdown, errors.purpose ? styles.inputError : null]}
+                >
+                    <Text
+                        numberOfLines={1}
+                        style={[styles.dropdownText, !selectedPurpose && { color: '#999' }]}
+                    >
+                        {selectedPurpose?.purpose_name || 'Select Purpose'}
+                    </Text>
+                    <Icon name="chevron-down" size={20} color="#94a3b8" />
+                </TouchableOpacity>
+                {!!errors.purpose && <Text style={styles.errText}>{errors.purpose}</Text>}
+
                 {/* PACKAGE NAME */}
                 <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
                     Package Name<Text style={{ color: 'red' }}> *</Text>
@@ -265,6 +320,22 @@ const AddPackages = ({ navigation, route }) => {
                 }}
                 keyField="branch_id"
                 labelField="branch_name"
+            />
+
+            {/* PURPOSE PICKER */}
+            <PickerModal
+                visible={purposeModal}
+                onClose={() => setPurposeModal(false)}
+                title="Select Purpose"
+                data={purposes}
+                loading={purposeLoading}
+                selected={selectedPurpose?.purpose_id}
+                onSelect={item => {
+                    setSelectedPurpose(item);
+                    setErrors(p => ({ ...p, purpose: '' }));
+                }}
+                keyField="purpose_id"
+                labelField="purpose_name"
             />
         </KeyboardAvoidingView>
     );

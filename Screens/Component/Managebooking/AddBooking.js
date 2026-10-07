@@ -76,7 +76,6 @@ const AddBooking = ({ navigation, route }) => {
 
     // selected branch ke packages + search
     const packageOptions = packages.filter(p =>
-        (!city || p.branch_name === city) &&
         (p.package_name || '').toLowerCase().includes(packageSearch.toLowerCase())
     );
     const [cityModal, setCityModal] = useState(false);
@@ -102,6 +101,10 @@ const AddBooking = ({ navigation, route }) => {
     const [attemptedMobile, setAttemptedMobile] = useState('');
     const [staticNumber, setStaticNumber] = useState('');
 
+
+    const [branchId, setBranchId] = useState('');
+    const [purposeId, setPurposeId] = useState('');
+
     /* ── OTP MODAL ── */
     const [showOtpModal, setShowOtpModal] = useState(false);
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -114,10 +117,10 @@ const AddBooking = ({ navigation, route }) => {
     /* ── MOUNT ── */
     useEffect(() => {
         loadUser();
-        fetchPurposes();
+
         fetchCoordinators();
         fetchBranches();
-        fetchPackages();
+
         if (isEdit && clientData) {
             setClientName(clientData.client_name || '');
             setAddress(clientData.client_address || '');
@@ -127,8 +130,7 @@ const AddBooking = ({ navigation, route }) => {
             setPurpose(clientData.client_purpose || '');
             setRemark(clientData.client_remark || '');
 
-            setPurpose(clientData.client_purpose || '');
-            setRemark(clientData.client_remark || '');
+
             setBookingAmount(clientData.booking_amount ? String(clientData.booking_amount) : '');
             setReceiveAmount(
                 (clientData.receive_amount ?? clientData.paid_amount)
@@ -195,6 +197,31 @@ const AddBooking = ({ navigation, route }) => {
             setFilteredCities(filtered);
         }
     }, [citySearch, cities]);   // 🔧 dependency mein cities add
+
+
+    useEffect(() => {
+        if (!isEdit || !cities.length || branchId) return;
+        const match = cities.find(c => c.value === clientData.client_city);
+        if (match) {
+            setBranchId(match.id);
+            fetchPurposes(match.id);
+        }
+    }, [cities]);
+
+
+
+    const editInitDone = useRef(false);
+
+    useEffect(() => {
+        if (!isEdit || !purposes.length || purposeId || editInitDone.current) return;
+        const match = purposes.find(p => p.value === clientData.client_purpose);
+        if (match) {
+            editInitDone.current = true;
+            const b = cities.find(c => c.value === clientData.client_city);
+            setPurposeId(match.id);
+            fetchPackages(b?.id, match.id);
+        }
+    }, [purposes]);
 
 
     /* ── ANDROID BACK BUTTON : CLOSE MODALS FIRST ── */
@@ -296,12 +323,11 @@ const AddBooking = ({ navigation, route }) => {
             const json = await res.json();
 
             if (json?.status && Array.isArray(json.payload)) {
-                setCities(
-                    json.payload.map(b => ({
-                        label: b.branch_name,
-                        value: b.branch_name,   // 🔧 city field mein naam hi store ho raha hai, isliye value bhi naam
-                    }))
-                );
+                setCities(json.payload.map(b => ({
+                    label: b.branch_name,
+                    value: b.branch_name,
+                    id: b.branch_id,        // 🆕 (API mein jo key ho wahi lagayein: id / branch_id)
+                })));
             } else {
                 setCities([]);
             }
@@ -313,21 +339,18 @@ const AddBooking = ({ navigation, route }) => {
         }
     };
 
-    const fetchPackages = async () => {
+    const fetchPackages = async (bId, pId) => {
         setPackagesLoading(true);
         try {
             const res = await fetch(API.list_package, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ branch_id: '' }),   // khali = puri list
+                body: JSON.stringify({ branch_id: bId, purpose_id: pId }),
             });
             const json = await res.json();
             setPackages(json?.status && Array.isArray(json.payload) ? json.payload : []);
-        } catch (e) {
-            setPackages([]);
-        } finally {
-            setPackagesLoading(false);
-        }
+        } catch (e) { setPackages([]); }
+        finally { setPackagesLoading(false); }
     };
 
     const loadUser = async () => {
@@ -337,18 +360,23 @@ const AddBooking = ({ navigation, route }) => {
         } catch (_) { }
     };
 
-    const fetchPurposes = async () => {
+    const fetchPurposes = async (bId) => {
         setPurposeLoading(true);
         try {
-            const res = await fetch(API.list_purpose);
+            const res = await fetch(API.list_purpose, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ branch_id: bId }),
+            });
             const json = await res.json();
             if (json.code == 200) {
                 setPurposes((json.payload || []).map(p => ({
                     label: p.purpose_name,
                     value: p.purpose_name,
+                    id: p.purpose_id,       // 🆕 (backend ki key check karein)
                 })));
-            }
-        } catch (_) { }
+            } else setPurposes([]);
+        } catch (_) { setPurposes([]); }
         finally { setPurposeLoading(false); }
     };
 
@@ -387,6 +415,8 @@ const AddBooking = ({ navigation, route }) => {
         client_email: email,
         client_purpose: purpose,
         client_remark: remark,
+        branch_id: branchId,
+        purpose_id: purposeId,
 
         booking_amount: bookingAmount,
         receive_amount: receiveAmount,
@@ -398,7 +428,7 @@ const AddBooking = ({ navigation, route }) => {
         shoot_month: isTentative ? shootMonth : '',
     });
 
-    console.log('Booking Payload:', JSON.stringify(buildBookingBody(), null, 2));   // ⬅ NEW
+
 
     /* ── SAVE ── */
     const handleSave = async () => {
@@ -667,6 +697,10 @@ const AddBooking = ({ navigation, route }) => {
                 <TouchableOpacity
                     style={[st.input, st.dateBtn, errors.purpose && st.inputErr]}
                     onPress={() => {
+                        if (!branchId) {
+                            Toast.show({ type: 'error', text1: 'Pehle Branch select karein', position: 'bottom', bottomOffset: 60 });
+                            return;
+                        }
                         setPurposeModal(true);
                         setPurposeSearch('');
                     }}
@@ -757,7 +791,14 @@ const AddBooking = ({ navigation, route }) => {
                         ]}
                     />
                     <TouchableOpacity
-                        onPress={() => { setPackageSearch(''); setPackageModal(true); }}
+                        onPress={() => {
+                            if (!purposeId) {
+                                Toast.show({ type: 'error', text1: 'Pehle Purpose select karein', position: 'bottom', bottomOffset: 60 });
+                                return;
+                            }
+                            setPackageSearch('');
+                            setPackageModal(true);
+                        }}
                         style={{ position: 'absolute', top: 14, right: 10, padding: 4 }}
                     >
                         <Icon name="chevron-down" size={22} color="#94a3b8" />
@@ -780,7 +821,7 @@ const AddBooking = ({ navigation, route }) => {
             </ScrollView>
 
             {/* ── MONTH MODAL ── */}
-            <Modal visible={monthModal} transparent animationType="fade">
+            <Modal visible={monthModal} transparent animationType="fade" onRequestClose={() => setMonthModal(false)}>
                 <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={() => setMonthModal(false)}>
                     <View style={st.monthModal} onStartShouldSetResponder={() => true}>
                         <Text style={st.monthModalTitle}>Select Month</Text>
@@ -811,7 +852,7 @@ const AddBooking = ({ navigation, route }) => {
             </Modal>
 
             {/* ── PURPOSE MODAL ── */}
-            <Modal visible={purposeModal} transparent animationType="fade">
+            <Modal visible={purposeModal} transparent animationType="fade" onRequestClose={() => setPurposeModal(false)}>
                 <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={() => setPurposeModal(false)}>
                     <View style={st.monthModal} onStartShouldSetResponder={() => true}>
                         <Text style={st.monthModalTitle}>Select Purpose</Text>
@@ -845,34 +886,50 @@ const AddBooking = ({ navigation, route }) => {
                             />
                         </View>
 
-                        <FlatList
-                            // data={purposes}
-                            data={filteredPurposes}
-                            keyExtractor={(item, index) => index.toString()}
-                            style={{ maxHeight: 360 }}
-                            keyboardShouldPersistTaps="handled"
-                            renderItem={({ item }) => {
-                                const sel = purpose === item.value;
-                                return (
-                                    <TouchableOpacity
-                                        onPress={() => {
-                                            setPurpose(item.value); clearErr('purpose'); setPurposeModal(false);
-                                            setPurposeSearch('');
-                                        }}
-                                        style={[st.monthItem, sel && st.monthItemSel]}
-                                    >
-                                        <Text style={[st.monthItemTxt, sel && st.monthItemTxtSel]}>{item.label}</Text>
-                                        {sel && <Icon name="check" size={18} color={Colors.buttonbgcolor} />}
-                                    </TouchableOpacity>
-                                );
-                            }}
-                        />
+                        {purposeLoading ? (
+                            <View style={{ paddingVertical: 30, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color={Colors.buttonbgcolor} />
+                            </View>
+                        ) : (
+                            <FlatList
+                                // data={purposes}
+                                data={filteredPurposes}
+                                keyExtractor={(item, index) => index.toString()}
+                                style={{ maxHeight: 360 }}
+                                keyboardShouldPersistTaps="handled"
+                                renderItem={({ item }) => {
+                                    const sel = purpose === item.value;
+                                    return (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setPurpose(item.value);
+                                                setPurposeId(item.id);
+                                                setRemark('');
+                                                fetchPackages(branchId, item.id);
+                                                clearErr('purpose');
+                                                setPurposeModal(false);      // 🆕
+                                                setPurposeSearch('');        // 🆕
+                                            }}
+                                            style={[st.monthItem, sel && st.monthItemSel]}
+                                        >
+                                            <Text style={[st.monthItemTxt, sel && st.monthItemTxtSel]}>{item.label}</Text>
+                                            {sel && <Icon name="check" size={18} color={Colors.buttonbgcolor} />}
+                                        </TouchableOpacity>
+                                    );
+                                }}
+                                ListEmptyComponent={
+                                    <Text style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontFamily: Fonts.Regular }}>
+                                        No purposes found
+                                    </Text>
+                                }
+                            />
+                        )}
                     </View>
                 </TouchableOpacity>
             </Modal>
 
             {/* ── 409 CONFIRM MODAL ── */}
-            <Modal visible={showConfirmModal} transparent animationType="fade">
+            <Modal visible={showConfirmModal} transparent animationType="fade" onRequestClose={() => setShowConfirmModal(false)}>
                 <View style={st.modalOverlay}>
                     <View style={st.confirmModal}>
 
@@ -915,7 +972,7 @@ const AddBooking = ({ navigation, route }) => {
             </Modal>
 
             {/* ── COORDINATOR MODAL ── */}
-            <Modal visible={coordinatorModal} transparent animationType="fade">
+            <Modal visible={coordinatorModal} transparent animationType="fade" onRequestClose={() => setCoordinatorModal(false)}>
                 <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={() => setCoordinatorModal(false)}>
                     <View style={st.monthModal} onStartShouldSetResponder={() => true}>
                         <Text style={st.monthModalTitle}>Select Coordinator</Text>
@@ -976,7 +1033,7 @@ const AddBooking = ({ navigation, route }) => {
             </Modal>
 
             {/* ── OTP MODAL ── */}
-            <Modal visible={showOtpModal} transparent animationType="fade">
+            <Modal visible={showOtpModal} transparent animationType="fade" onRequestClose={() => setShowOtpModal(false)}>
                 <View style={st.modalOverlay}>
                     <View style={st.otpModal}>
 
@@ -1038,7 +1095,7 @@ const AddBooking = ({ navigation, route }) => {
             </Modal>
 
             {/* ── CITY MODAL ── */}
-            <Modal visible={cityModal} transparent animationType="fade">
+            <Modal visible={cityModal} transparent animationType="fade" onRequestClose={() => setCityModal(false)}>
                 <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={() => setCityModal(false)}>
                     <View style={st.monthModal} onStartShouldSetResponder={() => true}>
                         <Text style={st.monthModalTitle}>Select Branch</Text>
@@ -1086,9 +1143,15 @@ const AddBooking = ({ navigation, route }) => {
                                         <TouchableOpacity
                                             onPress={() => {
                                                 setCity(item.value);
+                                                setBranchId(item.id);
+                                                setPurpose(''); setPurposeId('');
+                                                setRemark('');
+                                                setPurposes([]); setPackages([]);
+                                                fetchPurposes(item.id);
                                                 clearErr('city');
-                                                setCityModal(false);
-                                                setCitySearch('');
+                                                setCityModal(false);     // 🆕 yeh missing tha
+                                                setCitySearch('');       // 🆕
+                                                editInitDone.current = true;
                                             }}
                                             style={[st.monthItem, sel && st.monthItemSel]}
                                         >

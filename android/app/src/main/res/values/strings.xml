@@ -1,4 +1,4 @@
 <resources>
-    <!-- <string name="app_name">Shivay Photo</string> -->
-      <string name="app_name">Shivay Photo Dev</string>
+    <string name="app_name">Shivay Photo</string>
+      <!-- <string name="app_name">Shivay Photo Dev</string> -->
 </resources>
