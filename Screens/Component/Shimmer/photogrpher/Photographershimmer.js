@@ -3,87 +3,99 @@ import { View, StyleSheet } from 'react-native';
 import ShimmerPlaceholder from 'react-native-shimmer-placeholder';
 import LinearGradient from 'react-native-linear-gradient';
 
-const Photographershimmer = ({ count = 6 }) => {
+const S = (props) => <ShimmerPlaceholder LinearGradient={LinearGradient} {...props} />;
+
+// showPayment=false => Coordinator ke liye payment row hide
+const Photographershimmer = ({ count = 6, showPayment = true }) => {
     return (
         <View style={styles.container}>
-
-            {/* SEARCH BAR */}
-            <View style={styles.searchBar}>
-                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.searchIcon} />
-                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.searchText} />
-            </View>
-
-            {/* SECTION HEADER */}
-            <View style={styles.sectionHeader}>
-                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.sectionIcon} />
-                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.sectionTitle} />
-                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.sectionCount} />
-                <View style={{ flex: 1 }} />
-                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.sectionBadge} />
-            </View>
-
-            {/* PHOTOGRAPHER LIST */}
             <View style={styles.listContainer}>
                 {[...Array(count)].map((_, index) => (
                     <View key={index} style={styles.card}>
 
                         {/* TOP ROW */}
                         <View style={styles.topRow}>
-                            <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.avatar} />
+                            <S style={styles.avatar} />
 
                             <View style={styles.middleContent}>
                                 <View style={styles.nameRow}>
-                                    <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.name} />
-                                    <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.mobile} />
+                                    <S style={styles.name} />
+                                    <S style={styles.mobile} />
                                 </View>
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.purpose} />
+                                <S style={styles.purpose} />
                             </View>
 
                             <View style={styles.rightContent}>
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.idBadge} />
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.date} />
+                                <S style={styles.idBadge} />
                             </View>
                         </View>
 
-                        {/* PAYMENT ROW — Booking / Paid / Due */}
-                        <View style={styles.divider} />
-                        <View style={styles.paymentRow}>
-                            <View style={styles.paymentBlock}>
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.paymentLabel} />
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.paymentValue} />
-                            </View>
-                            <View style={[styles.paymentBlock, { marginHorizontal: 2.5 }]}>
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.paymentLabel} />
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.paymentValue} />
-                            </View>
-                            <View style={styles.paymentBlock}>
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.paymentLabel} />
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.paymentValue} />
-                            </View>
+                        {/* SHOOTS BLOCK */}
+                        <View style={styles.shootsBlock}>
+                            {[0, 1].map(i => (
+                                <View key={i} style={styles.shootRow}>
+                                    <S style={styles.shootIcon} />
+                                    <S style={styles.shootDate} />
+                                    <S style={styles.shootTime} />
+                                    <S style={styles.shootName} />
+                                    <S style={styles.shootPhotographer} />
+                                    <S style={styles.shootStatus} />
+                                </View>
+                            ))}
                         </View>
+
+                        {/* PROGRESS */}
+                        <View style={styles.progressWrap}>
+                            <View style={styles.progressTop}>
+                                <S style={styles.progressLabel} />
+                                <S style={styles.progressRight} />
+                            </View>
+                            <S style={styles.progressBar} />
+                        </View>
+
+                        {/* PAYMENT ROW — Booking / Paid / Due */}
+                        {showPayment && (
+                            <>
+                                <View style={styles.divider} />
+                                <View style={styles.paymentRow}>
+                                    {[0, 1, 2].map(i => (
+                                        <View key={i} style={styles.paymentBlock}>
+                                            <S style={styles.paymentLabel} />
+                                            <S style={styles.paymentValue} />
+                                        </View>
+                                    ))}
+                                </View>
+                            </>
+                        )}
 
                         {/* DIVIDER */}
                         <View style={styles.divider} />
 
+                        {/* PHOTOGRAPHER */}
+                        <View style={styles.photographerBlock}>
+                            <S style={styles.smallLabel} />
+                            <S style={styles.photographerName} />
+                        </View>
+
                         {/* DETAILS ROW */}
                         <View style={styles.detailsRow}>
                             <View style={styles.coordinatorBlock}>
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.smallLabel} />
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.coordinator} />
+                                <S style={styles.smallLabel} />
+                                <S style={styles.coordinator} />
                             </View>
 
                             <View style={styles.statusBlock}>
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.statusLabel} />
-                                <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.statusPill} />
+                                <S style={styles.statusLabel} />
+                                <S style={styles.statusPill} />
                             </View>
 
-                            <ShimmerPlaceholder LinearGradient={LinearGradient} style={styles.actionPill} />
+                            {showPayment && <S style={styles.paymentPill} />}
+                            <S style={styles.detailsPill} />
                         </View>
 
                     </View>
                 ))}
             </View>
-
         </View>
     );
 };
@@ -96,74 +108,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#f5f6f8',
     },
 
-    // SEARCH
-    searchBar: {
-        marginHorizontal: 12,
-        marginTop: 10,
-        backgroundColor: '#fff',
-        borderRadius: 11,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 11,
-        height: 40,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
-    },
-
-    searchIcon: {
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-    },
-
-    searchText: {
-        width: '72%',
-        height: 11,
-        borderRadius: 4,
-        marginLeft: 10,
-    },
-
-    // SECTION HEADER
-    sectionHeader: {
-        paddingHorizontal: 12,
-        paddingTop: 10,
-        paddingBottom: 7,
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-
-    sectionIcon: {
-        width: 17,
-        height: 17,
-        borderRadius: 4,
-    },
-
-    sectionTitle: {
-        width: 105,
-        height: 12,
-        borderRadius: 4,
-        marginLeft: 8,
-    },
-
-    sectionCount: {
-        width: 28,
-        height: 16,
-        borderRadius: 15,
-        marginLeft: 8,
-    },
-
-    sectionBadge: {
-        width: 150,
-        height: 20,
-        borderRadius: 15,
-    },
-
-    // LIST
     listContainer: {
         paddingHorizontal: 10,
+        paddingTop: 2,
     },
 
     // CARD
@@ -181,64 +128,125 @@ const styles = StyleSheet.create({
         elevation: 1,
     },
 
+    // TOP ROW
     topRow: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-
     avatar: {
         width: 31,
         height: 31,
         borderRadius: 8,
         marginRight: 7,
     },
-
     middleContent: {
         flex: 1,
         minWidth: 0,
     },
-
     nameRow: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-
     name: {
         width: 90,
         height: 12,
         borderRadius: 4,
     },
-
     mobile: {
         width: 50,
         height: 9,
         borderRadius: 4,
         marginLeft: 8,
     },
-
     purpose: {
         width: 75,
         height: 10,
         borderRadius: 4,
         marginTop: 6,
     },
-
     rightContent: {
         alignItems: 'flex-end',
         marginLeft: 7,
     },
-
     idBadge: {
         width: 38,
         height: 14,
         borderRadius: 5,
     },
 
-    date: {
-        width: 48,
+    // SHOOTS BLOCK
+    shootsBlock: {
+        marginTop: 8,
+        paddingTop: 7,
+        borderTopWidth: 0.5,
+        borderTopColor: '#eef2f6',
+    },
+    shootRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 5,
+    },
+    shootIcon: {
+        width: 11,
+        height: 11,
+        borderRadius: 3,
+    },
+    shootDate: {
+        width: 62,
+        height: 10,
+        borderRadius: 4,
+        marginLeft: 4,
+    },
+    shootTime: {
+        width: 70,
+        height: 14,
+        borderRadius: 8,
+        marginLeft: 6,
+    },
+    shootName: {
+        width: 45,
         height: 9,
         borderRadius: 4,
-        marginTop: 5,
+        marginLeft: 6,
+    },
+    shootPhotographer: {
+        width: 55,
+        height: 9,
+        borderRadius: 4,
+        marginLeft: 6,
+    },
+    shootStatus: {
+        width: 42,
+        height: 13,
+        borderRadius: 8,
+        marginLeft: 6,
+    },
+
+    // PROGRESS
+    progressWrap: {
+        marginTop: 6,
+        marginBottom: 2,
+    },
+    progressTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    progressLabel: {
+        width: 70,
+        height: 9,
+        borderRadius: 4,
+    },
+    progressRight: {
+        width: 40,
+        height: 8,
+        borderRadius: 4,
+    },
+    progressBar: {
+        width: '100%',
+        height: 5,
+        borderRadius: 3,
     },
 
     // DIVIDER
@@ -253,20 +261,28 @@ const styles = StyleSheet.create({
     paymentRow: {
         flexDirection: 'row',
     },
-
     paymentBlock: {
         flex: 1,
     },
-
     paymentLabel: {
         width: 50,
         height: 7,
         borderRadius: 3,
     },
-
     paymentValue: {
         width: 65,
         height: 11,
+        borderRadius: 4,
+        marginTop: 4,
+    },
+
+    // PHOTOGRAPHER
+    photographerBlock: {
+        marginBottom: 6,
+    },
+    photographerName: {
+        width: 110,
+        height: 10,
         borderRadius: 4,
         marginTop: 4,
     },
@@ -275,46 +291,46 @@ const styles = StyleSheet.create({
     detailsRow: {
         flexDirection: 'row',
         alignItems: 'flex-end',
+        marginTop: 1,
     },
-
     coordinatorBlock: {
         flex: 1,
         minWidth: 0,
     },
-
     smallLabel: {
         width: 55,
         height: 8,
         borderRadius: 4,
     },
-
     coordinator: {
         width: 85,
         height: 10,
         borderRadius: 4,
         marginTop: 4,
     },
-
     statusBlock: {
         marginLeft: 7,
         alignItems: 'flex-start',
     },
-
     statusLabel: {
-        width: 35,
+        width: 30,
         height: 8,
         borderRadius: 4,
         marginBottom: 3,
     },
-
     statusPill: {
-        width: 68,
+        width: 62,
         height: 22,
         borderRadius: 13,
     },
-
-    actionPill: {
-        width: 65,
+    paymentPill: {
+        width: 62,
+        height: 22,
+        borderRadius: 13,
+        marginLeft: 5,
+    },
+    detailsPill: {
+        width: 58,
         height: 22,
         borderRadius: 13,
         marginLeft: 5,

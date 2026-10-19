@@ -36,7 +36,7 @@ const fmtDisplay = (d) => {
 const AddBooking = ({ navigation, route }) => {
 
     const clientData = route?.params?.clientdata;
-    console.log('Client Data:', clientData);   // ⬅ NEW
+
     const isEdit = !!clientData;
 
     /* ── FIELDS ── */
@@ -58,6 +58,28 @@ const AddBooking = ({ navigation, route }) => {
 
     const [bookingAmount, setBookingAmount] = useState('');
     const [receiveAmount, setReceiveAmount] = useState('');
+
+    const newShoot = () => ({
+        key: `${Date.now()}-${Math.random()}`,
+        tentative: false,
+        date: null,
+        month: '',
+        slot_id: '',
+        slot_label: '',
+        name: '',
+    });
+
+    const [shoots, setShoots] = useState([newShoot()]);
+    const [pickerIndex, setPickerIndex] = useState(null);       // kis row ka date picker khula hai
+    const [monthModalIndex, setMonthModalIndex] = useState(null);
+    const [slotModalIndex, setSlotModalIndex] = useState(null);
+    const [slots, setSlots] = useState([]);
+    const [slotsLoading, setSlotsLoading] = useState(false);
+
+    const updateShoot = (index, patch) =>
+        setShoots(prev => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+    const addShoot = () => setShoots(prev => [...prev, newShoot()]);
+    const removeShoot = (index) => setShoots(prev => prev.filter((_, i) => i !== index));
 
 
 
@@ -101,6 +123,10 @@ const AddBooking = ({ navigation, route }) => {
     const [attemptedMobile, setAttemptedMobile] = useState('');
     const [staticNumber, setStaticNumber] = useState('');
 
+    /* ── SLOT FULL MODAL (400) ── */
+    const [showSlotFullModal, setShowSlotFullModal] = useState(false);
+    const [slotFullMsg, setSlotFullMsg] = useState('');
+
 
     const [branchId, setBranchId] = useState('');
     const [purposeId, setPurposeId] = useState('');
@@ -120,6 +146,7 @@ const AddBooking = ({ navigation, route }) => {
 
         fetchCoordinators();
         fetchBranches();
+        fetchSlots();
 
         if (isEdit && clientData) {
             setClientName(clientData.client_name || '');
@@ -140,26 +167,16 @@ const AddBooking = ({ navigation, route }) => {
             setCoordinator(clientData.coordinator_id || '');
 
 
-            const bookingVal = clientData.booking || clientData.shoot_month || clientData.booking_date || '';
-            const isMonthName = MONTHS.includes(bookingVal);
-
-            if (isMonthName) {
-                // Tentative — month name aaya hai (e.g. "September")
-                setIsTentative(true);
-                setShootMonth(bookingVal);
-                setShootDate(null);
-            } else if (bookingVal) {
-                // Actual date aaya hai
-                const parsed = new Date(bookingVal);
-                if (!isNaN(parsed)) {
-                    setIsTentative(false);
-                    setShootDate(parsed);
-                    setShootMonth('');
-                } else {
-                    // safety fallback
-                    setIsTentative(false);
-                    setShootDate(null);
-                }
+            if (Array.isArray(clientData.shoots) && clientData.shoots.length) {
+                setShoots(clientData.shoots.map(s => ({
+                    key: `${Date.now()}-${Math.random()}`,
+                    tentative: String(s.tentative) === '1',
+                    date: s.date ? new Date(s.date) : null,
+                    month: s.month || '',
+                    slot_id: s.slot_id || '',
+                    slot_label: s.time_slot || s.slot_name || s.slot_label || '',
+                    name: s.name || s.shoot_name || '',
+                })));
             }
 
         }
@@ -222,6 +239,37 @@ const AddBooking = ({ navigation, route }) => {
             fetchPackages(b?.id, match.id);
         }
     }, [purposes]);
+
+    const fetchSlots = async () => {
+        setSlotsLoading(true);
+        try {
+            const res = await fetch(API.list_slot, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            const json = await res.json();
+            setSlots(
+                json?.status && Array.isArray(json.payload)
+                    ? json.payload.map(s => ({
+                        id: s.slot_id,
+                        label: s.label,
+                        limit: s.slot_limit,
+                    }))
+                    : []
+            );
+        } catch (_) { setSlots([]); }
+        finally { setSlotsLoading(false); }
+    };
+
+    useEffect(() => {
+        if (!slots.length) return;
+        setShoots(prev => prev.map(s =>
+            s.slot_id && !s.slot_label
+                ? { ...s, slot_label: slots.find(x => String(x.id) === String(s.slot_id))?.label || '' }
+                : s
+        ));
+    }, [slots]);
 
 
     /* ── ANDROID BACK BUTTON : CLOSE MODALS FIRST ── */
@@ -387,8 +435,8 @@ const AddBooking = ({ navigation, route }) => {
         if (!city) err.city = 'Please Select Branch.';
         if (!mobile.trim()) err.mobile = 'Please Enter Valid Mobile No.';
         else if (mobile.length !== 10) err.mobile = 'Please Enter Valid Mobile No.';
-        if (!isTentative && !shootDate) err.shootDate = 'Please enter Shoot Date.';
-        if (isTentative && !shootMonth) err.shootDate = 'Please enter Shoot Date.';
+        const badRow = shoots.some(s => (s.tentative ? !s.month : !s.date));
+        if (badRow) err.shootDate = 'Please enter Shoot Date for every shoot.';
         if (!purpose) err.purpose = 'Please select purpose.';
         if (!remark.trim()) err.remark = 'Please Enter Package.';   // ⬅ NEW
         if (!coordinator) err.coordinator = 'Please select coordinator.';
@@ -423,9 +471,11 @@ const AddBooking = ({ navigation, route }) => {
         coordinator_id: coordinator,
 
         added_by: addedBy,
-        booking_status: isTentative ? 'Check' : 'Uncheck',
-        booking_date: isTentative ? '' : toApiDate(shootDate),
-        shoot_month: isTentative ? shootMonth : '',
+        shoots: shoots.map(s =>
+            s.tentative
+                ? { tentative: 1, month: s.month, name: s.name }
+                : { tentative: 0, date: toApiDate(s.date), slot_id: s.slot_id, name: s.name }
+        ),
     });
 
 
@@ -458,7 +508,17 @@ const AddBooking = ({ navigation, route }) => {
                 setStaticNumber(result.static_number || '');
                 setShowConfirmModal(true);
 
-            } else {
+            } else if (
+                (result.code == 400 || res.status === 400) && /slot/i.test(result.message || '')
+            ) {
+                // slot limit full — user ko batao + OTP ka option do
+                setSlotFullMsg(result.message || 'This slot is already full.');
+                setAttemptedMobile(result.attempted_mobile || mobile);
+                setStaticNumber(result.static_number || '');
+                setShowSlotFullModal(true);
+
+            }
+            else {
                 Toast.show({ type: 'error', text1: result.message || 'Failed', position: 'bottom', bottomOffset: 60 });
             }
         } catch (_) {
@@ -466,9 +526,44 @@ const AddBooking = ({ navigation, route }) => {
         } finally { setLoading(false); }
     };
 
+    /* ── Slot full: conflicting shoot ka slot hata do ── */
+    const handleChangeSlot = () => {
+        // message: "13-10-2026 ko 10:30 AM - 01:30 PM slot ki booking ho chuki hai (limit 2)."
+        const m = /(\d{2}-\d{2}-\d{4})\s+ko\s+(.+?)\s+slot/i.exec(slotFullMsg);
+        const msgDate = m?.[1];
+        const msgTime = m?.[2]?.trim();
+
+        setShoots(prev => {
+            let cleared = false;
+            const next = prev.map(s => {
+                const sameDate = msgDate && s.date && fmtDisplay(s.date) === msgDate;
+                const sameSlot = msgTime && s.slot_label === msgTime;
+                if (!s.tentative && sameDate && sameSlot) {
+                    cleared = true;
+                    return { ...s, slot_id: '', slot_label: '' };
+                }
+                return s;
+            });
+
+            // parse na ho paye to sabhi non-tentative shoots ka slot hata do
+            return cleared
+                ? next
+                : next.map(s => (s.tentative ? s : { ...s, slot_id: '', slot_label: '' }));
+        });
+
+        setShowSlotFullModal(false);
+        Toast.show({
+            type: 'error',
+            text1: 'Slot full hai, dusra slot select karein',
+            position: 'bottom',
+            bottomOffset: 60,
+        });
+    };
+
     /* ── SEND OTP (called when user presses YES in confirm modal) ── */
     const handleSendOtp = async () => {
         setShowConfirmModal(false);
+        setShowSlotFullModal(false);
         setOtpLoading(true);
         try {
             const res = await fetch(API.sent_otp, {
@@ -633,7 +728,7 @@ const AddBooking = ({ navigation, route }) => {
                 />
 
                 {/* SHOOT DATE */}
-                <Text style={st.label}>Shoot Date<Text style={st.req}>*</Text></Text>
+                {/* <Text style={st.label}>Shoot Date<Text style={st.req}>*</Text></Text>
                 <View style={st.checkRow}>
                     <TouchableOpacity
                         style={[st.checkbox, isTentative && st.checkboxChecked]}
@@ -683,6 +778,93 @@ const AddBooking = ({ navigation, route }) => {
                         onChange={(event, selected) => {
                             setShowDatePicker(false);
                             if (selected) { setShootDate(selected); clearErr('shootDate'); }
+                        }}
+                    />
+                )} */}
+
+                {/* SHOOTS */}
+                <Text style={st.label}>Shoot Details<Text style={st.req}>*</Text></Text>
+
+                {shoots.map((s, i) => {
+                    const rowErr = errors.shootDate && (s.tentative ? !s.month : !s.date);
+                    return (
+                        <View key={s.key} style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 10, marginTop: 10 }}>
+                            {/* Row header: tentative + remove */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <View style={st.checkRow}>
+                                    <TouchableOpacity
+                                        style={[st.checkbox, s.tentative && st.checkboxChecked]}
+                                        onPress={() => { updateShoot(i, { tentative: !s.tentative, date: null, month: '' }); clearErr('shootDate'); }}
+                                        activeOpacity={0.8}
+                                    >
+                                        {s.tentative && <Icon name="check" size={13} color="#fff" />}
+                                    </TouchableOpacity>
+                                    <Text style={st.checkLabel}>Tentative Date</Text>
+                                </View>
+                                {shoots.length > 1 && (
+                                    <TouchableOpacity onPress={() => removeShoot(i)} style={{ padding: 4 }}>
+                                        <Icon name="close-circle-outline" size={22} color="#ef4444" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            {/* Date / Month */}
+                            {!s.tentative ? (
+                                <TouchableOpacity style={[st.input, st.dateBtn, rowErr && st.inputErr]} onPress={() => setPickerIndex(i)} activeOpacity={0.8}>
+                                    <Text style={[st.dateTxt, !s.date && { color: '#999' }]}>{s.date ? fmtDisplay(s.date) : 'Select Shoot Date'}</Text>
+                                    <Icon name="calendar" size={18} color="#94a3b8" />
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity style={[st.input, st.dateBtn, rowErr && st.inputErr]} onPress={() => setMonthModalIndex(i)} activeOpacity={0.8}>
+                                    <Text style={[st.dateTxt, !s.month && { color: '#999' }]}>{s.month || 'Select Month'}</Text>
+                                    <Icon name="chevron-down" size={18} color="#94a3b8" />
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Time Slot (tentative par nahi bhejte, isliye wahan disable) */}
+                            <TouchableOpacity
+                                style={[st.input, st.dateBtn, s.tentative && { opacity: 0.4 }]}
+                                disabled={s.tentative}
+                                onPress={() => setSlotModalIndex(i)}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={[st.dateTxt, !s.slot_label && { color: '#999' }]}>{s.slot_label || 'Select time slot'}</Text>
+                                <Icon name="chevron-down" size={18} color="#94a3b8" />
+                            </TouchableOpacity>
+
+                            {/* Shoot Name */}
+                            <TextInput
+                                value={s.name}
+                                onChangeText={t => updateShoot(i, { name: t })}
+                                placeholder="Shoot name (e.g. Haldi)"
+                                placeholderTextColor="#999"
+                                style={st.input}
+                            />
+                        </View>
+                    );
+                })}
+                {errors.shootDate ? <Text style={st.errTxt}>{errors.shootDate}</Text> : null}
+
+                <TouchableOpacity
+                    onPress={addShoot}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, height: 44, borderRadius: 10, borderWidth: 1, borderColor: Colors.buttonbgcolor }}
+                >
+                    <Icon name="plus" size={18} color={Colors.buttonbgcolor} />
+                    <Text style={{ fontFamily: Fonts.Bold, fontSize: 13, color: Colors.buttonbgcolor }}>Add Another Shoot</Text>
+                </TouchableOpacity>
+
+                {pickerIndex !== null && (
+                    <DateTimePicker
+                        value={shoots[pickerIndex]?.date || new Date()}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={(event, selected) => {
+                            const i = pickerIndex;
+                            setPickerIndex(null);
+                            if (event.type === 'set' && selected) {
+                                updateShoot(i, { date: selected });
+                                clearErr('shootDate');
+                            }
                         }}
                     />
                 )}
@@ -821,24 +1003,38 @@ const AddBooking = ({ navigation, route }) => {
             </ScrollView>
 
             {/* ── MONTH MODAL ── */}
-            <Modal visible={monthModal} transparent animationType="fade" onRequestClose={() => setMonthModal(false)}>
-                <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={() => setMonthModal(false)}>
+            <Modal
+                visible={monthModalIndex !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setMonthModalIndex(null)}
+            >
+                <TouchableOpacity
+                    style={st.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setMonthModalIndex(null)}
+                >
                     <View style={st.monthModal} onStartShouldSetResponder={() => true}>
                         <Text style={st.monthModalTitle}>Select Month</Text>
-                        <TouchableOpacity style={st.modalCloseBtn} onPress={() => setMonthModal(false)}>
+
+                        <TouchableOpacity style={st.modalCloseBtn} onPress={() => setMonthModalIndex(null)}>
                             <Icon name="close" size={20} color="#64748b" />
                         </TouchableOpacity>
+
                         <FlatList
                             data={MONTHS}
-
                             keyExtractor={item => item}
                             style={{ maxHeight: 360 }}
-                            keyboardShouldPersistTaps='handled'
+                            keyboardShouldPersistTaps="handled"
                             renderItem={({ item }) => {
-                                const sel = shootMonth === item;
+                                const sel = shoots[monthModalIndex]?.month === item;
                                 return (
                                     <TouchableOpacity
-                                        onPress={() => { setShootMonth(item); clearErr('shootDate'); setMonthModal(false); }}
+                                        onPress={() => {
+                                            updateShoot(monthModalIndex, { month: item });
+                                            clearErr('shootDate');
+                                            setMonthModalIndex(null);
+                                        }}
                                         style={[st.monthItem, sel && st.monthItemSel]}
                                     >
                                         <Text style={[st.monthItemTxt, sel && st.monthItemTxtSel]}>{item}</Text>
@@ -847,6 +1043,51 @@ const AddBooking = ({ navigation, route }) => {
                                 );
                             }}
                         />
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            <Modal visible={slotModalIndex !== null} transparent animationType="fade" onRequestClose={() => setSlotModalIndex(null)}>
+                <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={() => setSlotModalIndex(null)}>
+                    <View style={st.monthModal} onStartShouldSetResponder={() => true}>
+                        <Text style={st.monthModalTitle}>Select Time Slot</Text>
+                        <TouchableOpacity style={st.modalCloseBtn} onPress={() => setSlotModalIndex(null)}>
+                            <Icon name="close" size={20} color="#64748b" />
+                        </TouchableOpacity>
+                        {slotsLoading ? (
+                            <View style={{ paddingVertical: 30, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color={Colors.buttonbgcolor} />
+                            </View>
+                        ) : (
+                            <FlatList
+                                data={slots}
+                                keyExtractor={(item) => String(item.id)}
+                                style={{ maxHeight: 360 }}
+                                renderItem={({ item }) => {
+                                    const sel = String(shoots[slotModalIndex]?.slot_id) === String(item.id);
+                                    return (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                updateShoot(slotModalIndex, { slot_id: item.id, slot_label: item.label });
+                                                setSlotModalIndex(null);
+                                            }}
+                                            style={[st.monthItem, sel && st.monthItemSel]}
+                                        >
+                                            <Text style={[st.monthItemTxt, sel && st.monthItemTxtSel]}>{item.label}</Text>
+
+                                            <View style={{ backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, marginRight: sel ? 8 : 0 }}>
+                                                <Text style={{ fontSize: 11, fontFamily: Fonts.Regular, color: '#475569' }}>
+                                                    {item.limit} {Number(item.limit) === 1 ? 'slot' : 'slots'}
+                                                </Text>
+                                            </View>
+
+                                            {sel && <Icon name="check" size={18} color={Colors.buttonbgcolor} />}
+                                        </TouchableOpacity>
+                                    );
+                                }} s
+                                ListEmptyComponent={<Text style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontFamily: Fonts.Regular }}>No slots found</Text>}
+                            />
+                        )}
                     </View>
                 </TouchableOpacity>
             </Modal>
@@ -926,6 +1167,38 @@ const AddBooking = ({ navigation, route }) => {
                         )}
                     </View>
                 </TouchableOpacity>
+            </Modal>
+
+            {/* ── SLOT FULL MODAL (400) ── */}
+            <Modal visible={showSlotFullModal} transparent animationType="fade" onRequestClose={() => setShowSlotFullModal(false)}>
+                <View style={st.modalOverlay}>
+                    <View style={st.confirmModal}>
+                        <TouchableOpacity style={st.modalCloseBtn} onPress={() => setShowSlotFullModal(false)}>
+                            <Icon name="close" size={20} color="#64748b" />
+                        </TouchableOpacity>
+
+                        <View style={st.confirmIconWrap}>
+                            <Icon name="clock-alert-outline" size={40} color={Colors.buttonbgcolor} />
+                        </View>
+
+                        <Text style={st.confirmTitle}>Slot Full</Text>
+                        <Text style={st.confirmMsg}>
+                            {slotFullMsg}
+                            {'\n\n'}
+                            Please dusra slot select karein.
+                        </Text>
+
+
+                        <View style={st.confirmBtnRow}>
+                            <TouchableOpacity
+                                style={[st.confirmBtn, st.confirmBtnYes]}
+                                onPress={handleChangeSlot}
+                            >
+                                <Text style={st.confirmBtnYesTxt}>OK</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
             </Modal>
 
             {/* ── 409 CONFIRM MODAL ── */}

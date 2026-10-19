@@ -719,10 +719,517 @@ const ScrollViewLike = ({ children }) => (
     </ScrollView>
 );
 
+// "24-09-2026" -> Date
+const parseDMY = (s) => {
+    const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(String(s || '').trim());
+    return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
+};
+
+// aaj se pehle ki shoot = laal
+const isPastShoot = (s) => {
+    const d = parseDMY(s?.date);
+    if (!d) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return d < today;
+};
+
+// multi photographer ho to unique naam, warna purana single naam
+const getPhotographerNames = (item) => {
+    const names = [...new Set((item.shoots || []).map(s => s.photographer).filter(Boolean))];
+    if (names.length) return names.join(', ');
+    return item.photographerName || 'Not Assigned';
+};
+
+const ShootsBlock = ({ shoots, accent = '#6366F1', max = 3 }) => {
+    const [expanded, setExpanded] = useState(false);
+
+    if (!Array.isArray(shoots) || shoots.length === 0) return null;
+
+    const visible = expanded ? shoots : shoots.slice(0, max);
+    const extra = shoots.length - max;
+
+    return (
+        <View style={{ marginTop: 8, paddingTop: 7, borderTopWidth: 0.5, borderTopColor: '#eef2f6' }}>
+            {visible.map((s, i) => {
+                const past = isPastShoot(s);
+                const dateColor = past ? '#DC2626' : '#475569';
+
+                return (
+                    <View
+                        key={s.shoot_id ?? i}
+                        style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 5 }}
+                    >
+                        {/* Date */}
+                        <Icon name="calendar-outline" size={11} color={past ? '#DC2626' : accent} />
+                        <Text style={{ fontSize: 10.5, fontFamily: Fonts.Bold, color: dateColor, marginLeft: 4 }}>
+                            {s.date || '--'}
+                        </Text>
+
+                        {/* Time slot */}
+                        {!!s.time && (
+                            <View
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: '#F1F5F9',
+                                    borderRadius: 8,
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 2,
+                                    marginLeft: 6,
+                                }}
+                            >
+                                <Icon name="clock-outline" size={10} color="#64748B" />
+                                <Text style={{ fontSize: 9.5, fontFamily: Fonts.Regular, color: '#475569', marginLeft: 3 }}>
+                                    {s.time}
+                                </Text>
+                            </View>
+                        )}
+
+                        {/* Shoot name */}
+                        {!!s.name && (
+                            <Text
+                                numberOfLines={1}
+                                style={{ fontSize: 10, fontFamily: Fonts.Regular, color: '#94A3B8', marginLeft: 6, textTransform: 'capitalize' }}
+                            >
+                                • {s.name}
+                            </Text>
+                        )}
+
+                        {/* Photographer */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
+                            <Icon name="camera-outline" size={10} color={s.photographer ? '#8B5CF6' : '#CBD5E1'} />
+                            <Text
+                                style={{
+                                    fontSize: 9.5,
+                                    fontFamily: Fonts.Regular,
+                                    color: s.photographer ? '#475569' : '#CBD5E1',
+                                    marginLeft: 3,
+                                    textTransform: 'capitalize',
+                                }}
+                            >
+                                {s.photographer || 'Not assigned'}
+                            </Text>
+                        </View>
+
+                        {/* Per-shoot status (Assigned / Accepted / Done) */}
+                        {!!s.status && (
+                            <View
+                                style={{
+                                    backgroundColor: (ASSIGNMENT_COLORS[s.status] || '#64748b') + '1A',
+                                    borderRadius: 8,
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 1.5,
+                                    marginLeft: 6,
+                                }}
+                            >
+                                <Text
+                                    style={{
+                                        fontSize: 8.5,
+                                        fontFamily: Fonts.Bold,
+                                        color: ASSIGNMENT_COLORS[s.status] || '#64748b',
+                                    }}
+                                >
+                                    {s.status}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                );
+            })}
+
+            {extra > 0 && (
+                <TouchableOpacity onPress={() => setExpanded(p => !p)} activeOpacity={0.7}>
+                    <Text style={{ fontSize: 10, fontFamily: Fonts.Bold, color: accent }}>
+                        {expanded ? 'Show less' : `+${extra} more`}
+                    </Text>
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+};
+
+const getShootCounts = shoots => {
+    const list = Array.isArray(shoots) ? shoots : [];
+    const total = list.length;
+    const done = list.filter(s => s.status === 'Done').length;
+    const acceptedOnly = list.filter(s => s.status === 'Accepted').length;
+    const assigned = total - done - acceptedOnly;
+
+    return {
+        total,
+        accepted: acceptedOnly + done, // progress bar ke liye
+        acceptedOnly,
+        done,
+        assigned,
+    };
+};
+
+const ShootProgress = ({ shoots, onPress }) => {
+    const { total, accepted, acceptedOnly, done, assigned } = getShootCounts(shoots);
+
+    if (total === 0) return null;
+
+    const percent = Math.round((accepted / total) * 100);
+    const isComplete = accepted === total;
+    const barColor = isComplete ? '#16A34A' : '#6366F1';
+
+    return (
+        <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={{ marginTop: 6, marginBottom: 2 }}>
+            <View
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 4,
+                }}
+            >
+                <Text style={{ fontSize: 9.5, fontFamily: Fonts.Bold, color: barColor }}>
+                    {accepted}/{total} Accepted
+                </Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 9, fontFamily: Fonts.Regular, color: '#94A3B8' }}>
+                        {isComplete ? 'All done' : `${total - accepted} baki`}
+                    </Text>
+                    <Icon name="chevron-right" size={12} color="#94A3B8" />
+                </View>
+            </View>
+
+            <View style={{ height: 5, borderRadius: 3, backgroundColor: '#E8E7FA', overflow: 'hidden' }}>
+                <View
+                    style={{
+                        width: `${percent}%`,
+                        height: '100%',
+                        borderRadius: 3,
+                        backgroundColor: barColor,
+                    }}
+                />
+            </View>
+
+            {/* Accepted / Done / Assigned breakdown */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 5 }}>
+                {acceptedOnly > 0 && (
+                    <View
+                        style={{
+                            backgroundColor: '#EEF2FF',
+                            borderRadius: 8,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            marginRight: 5,
+                        }}
+                    >
+                        <Text style={{ fontFamily: Fonts.Bold, fontSize: 8.5, color: '#6366F1' }}>
+                            {acceptedOnly} Accepted
+                        </Text>
+                    </View>
+                )}
+
+                {done > 0 && (
+                    <View
+                        style={{
+                            backgroundColor: '#E8F8EF',
+                            borderRadius: 8,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            marginRight: 5,
+                        }}
+                    >
+                        <Text style={{ fontFamily: Fonts.Bold, fontSize: 8.5, color: '#16A34A' }}>
+                            {done} Done
+                        </Text>
+                    </View>
+                )}
+
+                {assigned > 0 && (
+                    <View
+                        style={{
+                            backgroundColor: '#E0F2FE',
+                            borderRadius: 8,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                        }}
+                    >
+                        <Text style={{ fontFamily: Fonts.Bold, fontSize: 8.5, color: '#0284C7' }}>
+                            {assigned} Assigned
+                        </Text>
+                    </View>
+                )}
+            </View>
+        </TouchableOpacity>
+    );
+};
+
+
+/* =========================================================
+   SHOOTS DETAIL MODAL (progress par tap karne par)
+========================================================= */
+
+const ShootsDetailModal = ({ visible, item, onClose }) => {
+    if (!item) return null;
+
+    const shoots = Array.isArray(item.shoots) ? item.shoots : [];
+    const { total, accepted, acceptedOnly, done, assigned } = getShootCounts(shoots);
+
+    return (
+        <Modal
+            visible={visible}
+            transparent
+            animationType="fade"
+            onRequestClose={onClose}
+            statusBarTranslucent
+        >
+            <TouchableOpacity
+                activeOpacity={1}
+                onPress={onClose}
+                style={{
+                    flex: 1,
+                    backgroundColor: 'rgba(0,0,0,0.45)',
+                    justifyContent: 'center',
+                    paddingHorizontal: 16,
+                }}
+            >
+                <View
+                    onStartShouldSetResponder={() => true}
+                    style={{
+                        backgroundColor: '#fff',
+                        borderRadius: 16,
+                        maxHeight: '85%',
+                        paddingTop: 16,
+                        paddingBottom: 6,
+                    }}
+                >
+                    {/* CLOSE */}
+                    <TouchableOpacity
+                        onPress={onClose}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{ position: 'absolute', top: 12, right: 12, zIndex: 2 }}
+                    >
+                        <Icon name="close" size={20} color="#94a3b8" />
+                    </TouchableOpacity>
+
+                    {/* HEADER */}
+                    <Text
+                        style={{
+                            fontFamily: Fonts.Bold,
+                            fontSize: 16,
+                            color: '#202235',
+                            textAlign: 'center',
+                        }}
+                    >
+                        Booking #{item.id}
+                    </Text>
+
+                    <Text
+                        style={{
+                            fontFamily: Fonts.Regular,
+                            fontSize: 10,
+                            color: '#7b8090',
+                            textAlign: 'center',
+                            marginTop: 4,
+                            textTransform: 'capitalize',
+                        }}
+                    >
+                        {item.client} · {accepted}/{total} Accepted
+                    </Text>
+
+                    {/* COUNTS */}
+                    <View
+                        style={{
+                            flexDirection: 'row',
+                            justifyContent: 'center',
+                            marginTop: 10,
+                            paddingHorizontal: 14,
+                        }}
+                    >
+                        <View
+                            style={{
+                                flex: 1,
+                                backgroundColor: '#EEF2FF',
+                                borderRadius: 10,
+                                paddingVertical: 7,
+                                alignItems: 'center',
+                                marginRight: 6,
+                            }}
+                        >
+                            <Text style={{ fontFamily: Fonts.Bold, fontSize: 14, color: '#6366F1' }}>
+                                {acceptedOnly}
+                            </Text>
+                            <Text style={{ fontFamily: Fonts.Regular, fontSize: 8.5, color: '#6366F1' }}>
+                                Accepted
+                            </Text>
+                        </View>
+
+                        <View
+                            style={{
+                                flex: 1,
+                                backgroundColor: '#E8F8EF',
+                                borderRadius: 10,
+                                paddingVertical: 7,
+                                alignItems: 'center',
+                                marginRight: 6,
+                            }}
+                        >
+                            <Text style={{ fontFamily: Fonts.Bold, fontSize: 14, color: '#16A34A' }}>
+                                {done}
+                            </Text>
+                            <Text style={{ fontFamily: Fonts.Regular, fontSize: 8.5, color: '#16A34A' }}>
+                                Done
+                            </Text>
+                        </View>
+
+                        <View
+                            style={{
+                                flex: 1,
+                                backgroundColor: '#E0F2FE',
+                                borderRadius: 10,
+                                paddingVertical: 7,
+                                alignItems: 'center',
+                            }}
+                        >
+                            <Text style={{ fontFamily: Fonts.Bold, fontSize: 14, color: '#0284C7' }}>
+                                {assigned}
+                            </Text>
+                            <Text style={{ fontFamily: Fonts.Regular, fontSize: 8.5, color: '#0284C7' }}>
+                                Assigned
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* SHOOT LIST */}
+                    <ScrollView
+                        style={{ marginTop: 10 }}
+                        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 10 }}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {shoots.map((s, i) => {
+                            const color = ASSIGNMENT_COLORS[s.status] || '#64748b';
+
+                            return (
+                                <View
+                                    key={s.shoot_id ?? i}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: '#fafffd',
+                                        borderRadius: 10,
+                                        borderWidth: 0.6,
+                                        borderColor: '#e6ecf5',
+                                        borderLeftWidth: 3,
+                                        borderLeftColor: color,
+                                        paddingVertical: 9,
+                                        paddingHorizontal: 9,
+                                        marginBottom: 8,
+                                    }}
+                                >
+                                    <View
+                                        style={{
+                                            width: 30,
+                                            height: 30,
+                                            borderRadius: 8,
+                                            backgroundColor: color + '1A',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            marginRight: 9,
+                                        }}
+                                    >
+                                        <Icon name="camera" size={15} color={color} />
+                                    </View>
+
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontFamily: Fonts.Bold, fontSize: 11, color: '#202235' }}>
+                                            {s.date || '--'}
+                                        </Text>
+
+                                        <View
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                flexWrap: 'wrap',
+                                                marginTop: 2,
+                                            }}
+                                        >
+                                            <Icon name="clock-outline" size={10} color="#64748B" />
+                                            <Text
+                                                style={{
+                                                    fontFamily: Fonts.Regular,
+                                                    fontSize: 9.5,
+                                                    color: '#64748B',
+                                                    marginLeft: 3,
+                                                }}
+                                            >
+                                                {s.time || '--'}
+                                            </Text>
+
+                                            {!!s.name && (
+                                                <View
+                                                    style={{
+                                                        backgroundColor: '#EEF2FF',
+                                                        borderRadius: 6,
+                                                        paddingHorizontal: 6,
+                                                        paddingVertical: 1,
+                                                        marginLeft: 6,
+                                                    }}
+                                                >
+                                                    <Text
+                                                        style={{
+                                                            fontFamily: Fonts.Medium,
+                                                            fontSize: 8.5,
+                                                            color: '#6366F1',
+                                                            textTransform: 'capitalize',
+                                                        }}
+                                                    >
+                                                        {s.name}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
+
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+                                            <Icon
+                                                name="camera-outline"
+                                                size={10}
+                                                color={s.photographer ? '#8B5CF6' : '#CBD5E1'}
+                                            />
+                                            <Text
+                                                style={{
+                                                    fontFamily: Fonts.Regular,
+                                                    fontSize: 9.5,
+                                                    color: s.photographer ? '#475569' : '#CBD5E1',
+                                                    marginLeft: 3,
+                                                    textTransform: 'capitalize',
+                                                }}
+                                            >
+                                                {s.photographer || 'Not assigned'}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <View
+                                        style={{
+                                            backgroundColor: color + '1A',
+                                            borderRadius: 10,
+                                            paddingHorizontal: 8,
+                                            paddingVertical: 3,
+                                            marginLeft: 6,
+                                        }}
+                                    >
+                                        <Text style={{ fontFamily: Fonts.Bold, fontSize: 8.5, color }}>
+                                            {s.status || 'Pending'}
+                                        </Text>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+            </TouchableOpacity>
+        </Modal>
+    );
+};
 /* ── SHOOT CARD (bahar nikala + memo kiya — perf fix) ── */
 const ShootCard = memo(
-    ({ item, userType, onView, onStatusPress, onAssignmentPress, onCoordinatorView, onManagePayment }) => {
-
+    ({ item, userType, onView, onStatusPress, onAssignmentPress, onCoordinatorView, onManagePayment, onShootsPress }) => {
         const isAdmin = userType == 'Admin';
         const isCoordinator = userType == 'Coordinator';
         const isPhotographer = userType == 'Photographer';
@@ -848,29 +1355,29 @@ const ShootCard = memo(
                                 #{item.id}
                             </Text>
                         </View>
-
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
-                            {item.hasBookingDate && item.date !== '-' && (
-                                <Icon
-                                    name="calendar-outline"
-                                    size={9}
-                                    color="#94a3b8"
-                                />
-                            )}
-                            <Text
-                                style={{
-                                    color: '#94a3b8',
-                                    fontFamily: Fonts.Regular,
-                                    fontSize: 8.5,
-                                    marginLeft: (item.hasBookingDate && item.date !== '-') ? 2 : 0,
-                                }}
-                            >
-                                {item.date}
-                            </Text>
-                        </View>
+                        {(!item.shoots || item.shoots.length === 0) && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+                                {item.hasBookingDate && item.date !== '-' && (
+                                    <Icon name="calendar-outline" size={9} color="#94a3b8" />
+                                )}
+                                <Text
+                                    style={{
+                                        color: '#94a3b8',
+                                        fontFamily: Fonts.Regular,
+                                        fontSize: 8.5,
+                                        marginLeft: (item.hasBookingDate && item.date !== '-') ? 2 : 0,
+                                    }}
+                                >
+                                    {item.date}
+                                </Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 
+                <ShootsBlock shoots={item.shoots} accent={Colors.buttonbgcolor} />
+
+                <ShootProgress shoots={item.shoots} onPress={() => onShootsPress(item)} />
 
                 {/* PAYMENT ROW — sirf Admin & Photographer ko, Coordinator ko kabhi nahi */}
                 {showPaymentRow && (
@@ -965,6 +1472,24 @@ const ShootCard = memo(
                         marginBottom: 6,
                     }}
                 />
+
+                <View style={{ marginBottom: 6 }}>
+                    <Text style={{ color: '#a0aab8', fontFamily: Fonts.Regular, fontSize: 8 }}>
+                        Photographer
+                    </Text>
+                    <Text
+                        numberOfLines={1}
+                        style={{
+                            color: getPhotographerNames(item) === 'Not Assigned' ? '#D97706' : '#16A34A',
+                            fontFamily: Fonts.Bold,
+                            fontSize: 10,
+                            marginTop: 1,
+                            textTransform: 'capitalize',
+                        }}
+                    >
+                        {getPhotographerNames(item)}
+                    </Text>
+                </View>
 
                 {/* DETAILS + ACTIONS */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 1 }}>
@@ -1208,6 +1733,8 @@ const Photographerassignment = () => {
     const [statusModalVisible, setStatusModalVisible] = useState(false);
     const [assignmentModalVisible, setAssignmentModalVisible] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
+
+    const [shootsModalItem, setShootsModalItem] = useState(null);
 
 
 
@@ -1564,6 +2091,8 @@ const Photographerassignment = () => {
         client_id: row.client_id,
         mobile_no: row.mobile_no,
         coordinator: row.coordinator_name || '-',
+        shoots: Array.isArray(row.shoots) ? row.shoots : [],
+        photographerName: row.photographer_name || '',
         status:
             row.booking_final_status === 'Done'
                 ? 'Confirmed'
@@ -1626,10 +2155,12 @@ const Photographerassignment = () => {
     const filteredShoots = shoots.filter(item => {
         const q = searchQuery.trim().toLowerCase();
         if (!q) return true;
+        const shootText = (item.shoots || []).map(s => `${s.name || ''} ${s.photographer || ''}`).join(' ');
         return (
             (item.client || '').toLowerCase().includes(q) ||
             (item.purpose || '').toLowerCase().includes(q) ||
-            (item.id || '').toLowerCase().includes(q)
+            (item.id || '').toLowerCase().includes(q) ||
+            shootText.toLowerCase().includes(q)
         );
     });
 
@@ -1687,6 +2218,7 @@ const Photographerassignment = () => {
                 onAssignmentPress={openAssignmentModal}
                 onCoordinatorView={goToCoordination}
                 onManagePayment={openPaymentModal}
+                onShootsPress={setShootsModalItem}
             />
         ),
         [userType]
@@ -1757,7 +2289,7 @@ const Photographerassignment = () => {
                             setSearchQuery(text);
                             setVisibleCount(PAGE_SIZE); // 👈 search karte hi pagination reset
                         }}
-                        placeholder="Search by client, purpose or booking no."
+                        placeholder="Search by client, purpose, shoot or booking no."
                         placeholderTextColor="#94a3b8"
                         style={{
                             flex: 1,
@@ -1851,7 +2383,7 @@ const Photographerassignment = () => {
 
                 {/* LIST */}
                 {loading ? (
-                    <Photographershimmer count={6} />
+                    <Photographershimmer count={6} showPayment={userType !== 'Coordinator'} />
                 ) : filteredShoots.length === 0 ? (
                     <View
                         style={{
@@ -2307,6 +2839,12 @@ const Photographerassignment = () => {
                 </TouchableWithoutFeedback>
             </Modal>
 
+
+            <ShootsDetailModal
+                visible={!!shootsModalItem}
+                item={shootsModalItem}
+                onClose={() => setShootsModalItem(null)}
+            />
             <PaymentModal
                 visible={paymentModalVisible}
                 item={paymentItem}

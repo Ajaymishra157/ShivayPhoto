@@ -147,6 +147,579 @@ const parseApiDateToDateObj = dateStr => {
 };
 
 /* =========================================================
+   SHOOTS BLOCK (card ke andar saari shoot dates)
+========================================================= */
+
+const isPastShoot = dateStr => {
+    if (!dateStr) return false;
+    const d = parseApiDateToDateObj(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return d < today;
+};
+
+const ShootField = ({ label, children, flex = 1 }) => (
+    <View style={{ flex, paddingRight: 6 }}>
+        <Text style={{ fontFamily: Fonts.Regular, fontSize: 8.5, color: '#999eab' }}>
+            {label}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+            {children}
+        </View>
+    </View>
+);
+
+
+/* =========================================================
+   SHOOT PROGRESS (shoots array se count)
+========================================================= */
+
+const getShootCounts = shoots => {
+    const list = Array.isArray(shoots) ? shoots : [];
+    const total = list.length;
+    const done = list.filter(s => s.accept_status === 'Done').length;
+    const acceptedOnly = list.filter(s => s.accept_status === 'Accepted').length;
+    const assigned = total - done - acceptedOnly;
+
+    return {
+        total,
+        accepted: acceptedOnly + done, // progress bar ke liye
+        acceptedOnly,
+        done,
+        assigned,
+    };
+};
+
+const ShootProgress = ({ shoots, onPress }) => {
+    const { total, accepted, acceptedOnly, done, assigned } = getShootCounts(shoots);
+
+    if (total === 0) return null;
+
+    const percent = Math.round((accepted / total) * 100);
+    const isComplete = accepted === total;
+    const barColor = isComplete ? '#16A34A' : '#6366F1';
+
+    return (
+        <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={{ marginTop: 6 }}>
+            <View
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 4,
+                }}
+            >
+                <Text style={{ fontFamily: Fonts.Bold, fontSize: 9.5, color: barColor }}>
+                    {accepted}/{total} Accepted
+                </Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontFamily: Fonts.Regular, fontSize: 9, color: '#94A3B8' }}>
+                        {isComplete ? 'All done' : `${total - accepted} baki`}
+                    </Text>
+                    <Icon name="chevron-right" size={12} color="#94A3B8" />
+                </View>
+            </View>
+
+            <View
+                style={{
+                    height: 5,
+                    borderRadius: 3,
+                    backgroundColor: '#E8E7FA',
+                    overflow: 'hidden',
+                }}
+            >
+                <View
+                    style={{
+                        width: `${percent}%`,
+                        height: '100%',
+                        borderRadius: 3,
+                        backgroundColor: barColor,
+                    }}
+                />
+            </View>
+
+            {/* Accepted / Done / Assigned breakdown */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 5 }}>
+                {acceptedOnly > 0 && (
+                    <View
+                        style={{
+                            backgroundColor: '#EEF2FF',
+                            borderRadius: 8,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            marginRight: 5,
+                        }}
+                    >
+                        <Text style={{ fontFamily: Fonts.Bold, fontSize: 8.5, color: '#6366F1' }}>
+                            {acceptedOnly} Accepted
+                        </Text>
+                    </View>
+                )}
+
+                {done > 0 && (
+                    <View
+                        style={{
+                            backgroundColor: '#E8F8EF',
+                            borderRadius: 8,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            marginRight: 5,
+                        }}
+                    >
+                        <Text style={{ fontFamily: Fonts.Bold, fontSize: 8.5, color: '#16A34A' }}>
+                            {done} Done
+                        </Text>
+                    </View>
+                )}
+
+                {assigned > 0 && (
+                    <View
+                        style={{
+                            backgroundColor: '#FFF7E6',
+                            borderRadius: 8,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                        }}
+                    >
+                        <Text style={{ fontFamily: Fonts.Bold, fontSize: 8.5, color: '#F59E0B' }}>
+                            {assigned} Assigned
+                        </Text>
+                    </View>
+                )}
+            </View>
+        </TouchableOpacity>
+    );
+};
+const ShootsBlock = ({ shoots, max = 3, onProgressPress }) => {
+    const [expanded, setExpanded] = useState(false);
+
+    if (!Array.isArray(shoots) || shoots.length === 0) return null;
+
+    const visible = expanded ? shoots : shoots.slice(0, max);
+    const extra = shoots.length - max;
+
+    return (
+        <View
+            style={{
+                paddingHorizontal: 10,
+                paddingVertical: 7,
+                borderBottomWidth: 0.5,
+                borderBottomColor: '#f0f0f5',
+            }}
+        >
+            <Text style={{ fontFamily: Fonts.Bold, fontSize: 9, color: '#6366F1' }}>
+                SHOOTS ({shoots.length})
+            </Text>
+
+            <ShootProgress shoots={shoots} onPress={onProgressPress} />
+
+            {visible.map((s, i) => {
+                const isDone = s.accept_status === 'Done';
+                // Done shoot ki purani date laal nahi dikhani
+                const past = !isDone && isPastShoot(s.shoot_date);
+                const st = STATUS_CONFIG[s.accept_status] || STATUS_CONFIG.Pending;
+                const time = s.start_time
+                    ? `${s.start_time}${s.end_time ? ' - ' + s.end_time : ''}`
+                    : '';
+
+                return (
+                    <View
+                        key={s.shoot_id ?? i}
+                        style={{
+                            marginTop: 6,
+                            paddingHorizontal: 8,
+                            paddingVertical: 7,
+                            backgroundColor: '#fafaff',
+                            borderRadius: 8,
+                            borderWidth: 0.5,
+                            borderColor: '#eeeef7',
+                        }}
+                    >
+                        <View style={{ flexDirection: 'row' }}>
+                            {/* SHOOT DATE */}
+                            <ShootField label="Shoot Date" flex={1.1}>
+                                <Icon
+                                    name="calendar-outline"
+                                    size={11}
+                                    color={past ? '#DC2626' : '#6366F1'}
+                                />
+                                <Text
+                                    style={{
+                                        fontFamily: Fonts.Bold,
+                                        fontSize: 10,
+                                        color: past ? '#DC2626' : '#4b5062',
+                                        marginLeft: 4,
+                                    }}
+                                >
+                                    {s.shoot_date
+                                        ? formatDateDDMMYYYY(s.shoot_date)
+                                        : (s.shoot_month || '--')}
+                                </Text>
+                            </ShootField>
+
+                            {/* SHOOT TIME */}
+                            <ShootField label="Shoot Time" flex={1.5}>
+                                <Icon name="clock-outline" size={11} color="#64748B" />
+                                <Text
+                                    numberOfLines={2}
+                                    style={{
+                                        flex: 1,
+                                        fontFamily: Fonts.Medium,
+                                        fontSize: 10,
+                                        color: time ? '#4b5062' : '#cbd5e1',
+                                        marginLeft: 4,
+                                    }}
+                                >
+                                    {time || '--'}
+                                </Text>
+                            </ShootField>
+
+                            {/* SHOOT NAME */}
+                            <ShootField label="Shoot Name" flex={1}>
+                                <Text
+                                    numberOfLines={2}
+                                    style={{
+                                        flex: 1,
+                                        fontFamily: Fonts.Medium,
+                                        fontSize: 10,
+                                        color: s.shoot_name ? '#4b5062' : '#cbd5e1',
+                                        textTransform: 'capitalize',
+                                    }}
+                                >
+                                    {s.shoot_name || '--'}
+                                </Text>
+                            </ShootField>
+                        </View>
+
+                        {/* STATUS */}
+                        {!!s.accept_status && (
+                            <View
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    marginTop: 6,
+                                }}
+                            >
+                                <Text
+                                    style={{
+                                        fontFamily: Fonts.Regular,
+                                        fontSize: 8.5,
+                                        color: '#999eab',
+                                    }}
+                                >
+                                    Status:
+                                </Text>
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: st.bg,
+                                        borderRadius: 10,
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 2,
+                                        marginLeft: 5,
+                                    }}
+                                >
+                                    <Icon name={st.icon} size={10} color={st.color} />
+                                    <Text
+                                        style={{
+                                            fontFamily: Fonts.Bold,
+                                            fontSize: 8.5,
+                                            color: st.color,
+                                            marginLeft: 3,
+                                        }}
+                                    >
+                                        {s.accept_status}
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+                    </View>
+                );
+            })}
+
+            {extra > 0 && (
+                <TouchableOpacity
+                    onPress={() => setExpanded(p => !p)}
+                    activeOpacity={0.7}
+                    style={{ marginTop: 6 }}
+                >
+                    <Text style={{ fontFamily: Fonts.Bold, fontSize: 9.5, color: Colors.buttonbgcolor }}>
+                        {expanded ? 'Show less' : `+${extra} more`}
+                    </Text>
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+};
+
+/* =========================================================
+   SHOOTS DETAIL MODAL (progress par tap karne par)
+========================================================= */
+
+const ShootsDetailModal = ({ visible, item, onClose }) => {
+    if (!item) return null;
+
+    const shoots = Array.isArray(item.shoots) ? item.shoots : [];
+    const { total, accepted, acceptedOnly, done, assigned } = getShootCounts(shoots);
+
+    return (
+        <Modal
+            visible={visible}
+            transparent
+            animationType="fade"
+            onRequestClose={onClose}
+            statusBarTranslucent
+        >
+            <TouchableOpacity
+                activeOpacity={1}
+                onPress={onClose}
+                style={{
+                    flex: 1,
+                    backgroundColor: 'rgba(0,0,0,0.45)',
+                    justifyContent: 'center',
+                    paddingHorizontal: 16,
+                }}
+            >
+                <View
+                    onStartShouldSetResponder={() => true}
+                    style={{
+                        backgroundColor: '#fff',
+                        borderRadius: 16,
+                        maxHeight: '85%',
+                        paddingTop: 16,
+                        paddingBottom: 6,
+                    }}
+                >
+                    {/* CLOSE */}
+                    <TouchableOpacity
+                        onPress={onClose}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{ position: 'absolute', top: 12, right: 12, zIndex: 2 }}
+                    >
+                        <Icon name="close" size={20} color="#94a3b8" />
+                    </TouchableOpacity>
+
+                    {/* HEADER */}
+                    <Text
+                        style={{
+                            fontFamily: Fonts.Bold,
+                            fontSize: 16,
+                            color: '#202235',
+                            textAlign: 'center',
+                        }}
+                    >
+                        Booking #{item.id}
+                    </Text>
+
+                    <Text
+                        style={{
+                            fontFamily: Fonts.Regular,
+                            fontSize: 10,
+                            color: '#7b8090',
+                            textAlign: 'center',
+                            marginTop: 4,
+                            textTransform: 'capitalize',
+                        }}
+                    >
+                        {item.client} · {accepted}/{total} Accepted
+                    </Text>
+
+                    {/* COUNTS */}
+                    <View
+                        style={{
+                            flexDirection: 'row',
+                            justifyContent: 'center',
+                            marginTop: 10,
+                            paddingHorizontal: 14,
+                        }}
+                    >
+                        <View
+                            style={{
+                                flex: 1,
+                                backgroundColor: '#EEF2FF',
+                                borderRadius: 10,
+                                paddingVertical: 7,
+                                alignItems: 'center',
+                                marginRight: 6,
+                            }}
+                        >
+                            <Text style={{ fontFamily: Fonts.Bold, fontSize: 14, color: '#6366F1' }}>
+                                {acceptedOnly}
+                            </Text>
+                            <Text style={{ fontFamily: Fonts.Regular, fontSize: 8.5, color: '#6366F1' }}>
+                                Accepted
+                            </Text>
+                        </View>
+
+                        <View
+                            style={{
+                                flex: 1,
+                                backgroundColor: '#E8F8EF',
+                                borderRadius: 10,
+                                paddingVertical: 7,
+                                alignItems: 'center',
+                                marginRight: 6,
+                            }}
+                        >
+                            <Text style={{ fontFamily: Fonts.Bold, fontSize: 14, color: '#16A34A' }}>
+                                {done}
+                            </Text>
+                            <Text style={{ fontFamily: Fonts.Regular, fontSize: 8.5, color: '#16A34A' }}>
+                                Done
+                            </Text>
+                        </View>
+
+                        <View
+                            style={{
+                                flex: 1,
+                                backgroundColor: '#FFF7E6',
+                                borderRadius: 10,
+                                paddingVertical: 7,
+                                alignItems: 'center',
+                            }}
+                        >
+                            <Text style={{ fontFamily: Fonts.Bold, fontSize: 14, color: '#F59E0B' }}>
+                                {assigned}
+                            </Text>
+                            <Text style={{ fontFamily: Fonts.Regular, fontSize: 8.5, color: '#F59E0B' }}>
+                                Assigned
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* SHOOT LIST */}
+                    <ScrollView
+                        style={{ marginTop: 10 }}
+                        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 10 }}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {shoots.map((s, i) => {
+                            const st = STATUS_CONFIG[s.accept_status] || STATUS_CONFIG.Pending;
+                            const time = s.start_time
+                                ? `${s.start_time}${s.end_time ? ' - ' + s.end_time : ''}`
+                                : '';
+
+                            return (
+                                <View
+                                    key={s.shoot_id ?? i}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: '#fafffd',
+                                        borderRadius: 10,
+                                        borderWidth: 0.6,
+                                        borderColor: '#e6ecf5',
+                                        borderLeftWidth: 3,
+                                        borderLeftColor: st.color,
+                                        paddingVertical: 9,
+                                        paddingHorizontal: 9,
+                                        marginBottom: 8,
+                                    }}
+                                >
+                                    <View
+                                        style={{
+                                            width: 30,
+                                            height: 30,
+                                            borderRadius: 8,
+                                            backgroundColor: st.bg,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            marginRight: 9,
+                                        }}
+                                    >
+                                        <Icon name="camera" size={15} color={st.color} />
+                                    </View>
+
+                                    <View style={{ flex: 1 }}>
+                                        <Text
+                                            style={{
+                                                fontFamily: Fonts.Bold,
+                                                fontSize: 11,
+                                                color: '#202235',
+                                            }}
+                                        >
+                                            {s.shoot_date
+                                                ? formatDateDDMMYYYY(s.shoot_date)
+                                                : (s.shoot_month || '--')}
+                                        </Text>
+
+                                        <View
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                flexWrap: 'wrap',
+                                                marginTop: 2,
+                                            }}
+                                        >
+                                            <Icon name="clock-outline" size={10} color="#64748B" />
+                                            <Text
+                                                style={{
+                                                    fontFamily: Fonts.Regular,
+                                                    fontSize: 9.5,
+                                                    color: '#64748B',
+                                                    marginLeft: 3,
+                                                }}
+                                            >
+                                                {time || '--'}
+                                            </Text>
+
+                                            {!!s.shoot_name && (
+                                                <View
+                                                    style={{
+                                                        backgroundColor: '#EEF2FF',
+                                                        borderRadius: 6,
+                                                        paddingHorizontal: 6,
+                                                        paddingVertical: 1,
+                                                        marginLeft: 6,
+                                                    }}
+                                                >
+                                                    <Text
+                                                        style={{
+                                                            fontFamily: Fonts.Medium,
+                                                            fontSize: 8.5,
+                                                            color: '#6366F1',
+                                                            textTransform: 'capitalize',
+                                                        }}
+                                                    >
+                                                        {s.shoot_name}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    </View>
+
+                                    <View
+                                        style={{
+                                            backgroundColor: st.bg,
+                                            borderRadius: 10,
+                                            paddingHorizontal: 8,
+                                            paddingVertical: 3,
+                                            marginLeft: 6,
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontFamily: Fonts.Bold,
+                                                fontSize: 8.5,
+                                                color: st.color,
+                                            }}
+                                        >
+                                            {s.accept_status || 'Pending'}
+                                        </Text>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+            </TouchableOpacity>
+        </Modal>
+    );
+};
+
+/* =========================================================
    PAYMENT MODAL — full CRUD (Add / Edit / Delete + History)
    IMPORTANT:
    This component is OUTSIDE Myassignments.
@@ -1270,6 +1843,7 @@ const Myassignments = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
+    const [shootsModalItem, setShootsModalItem] = useState(null);
 
     /* =====================================================
        PAYMENT MANAGEMENT (CRUD) STATES
@@ -1382,6 +1956,7 @@ const Myassignments = () => {
                     due: Number(item.due_amount) || 0,
                     coordinator: item.coordinator_name ?? '-',
                     status: item.assignment_status ?? 'Assigned',
+                    shoots: Array.isArray(item.shoots) ? item.shoots : [],   // 👈 NEW
                     paymentHistory: [],
                 }));
 
@@ -2203,6 +2778,10 @@ const Myassignments = () => {
                     </View>
                 </View>
 
+                <ShootsBlock
+                    shoots={item.shoots}
+                    onProgressPress={() => setShootsModalItem(item)}
+                />
                 {/* AMOUNT ROW */}
 
                 <View
@@ -2980,6 +3559,12 @@ const Myassignments = () => {
                 onClose={closeConfirmModal}
                 onConfirm={proceedConfirmAction}
                 submitting={!!submittingStatusId}
+            />
+
+            <ShootsDetailModal
+                visible={!!shootsModalItem}
+                item={shootsModalItem}
+                onClose={() => setShootsModalItem(null)}
             />
 
             {/* =================================================

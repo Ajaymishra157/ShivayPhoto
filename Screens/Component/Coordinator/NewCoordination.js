@@ -222,6 +222,13 @@ const getSafeDate = (value) => {
     return date;
 };
 
+// "2026-11-05" -> local Date (timezone se din aage-peeche nahi hoga)
+const parseYMD = (v) => {
+    if (!v || String(v).startsWith('0000')) return null;
+    const [y, m, d] = String(v).split('-').map(Number);
+    return new Date(y, m - 1, d);
+};
+
 
 /* =========================================================
    INFO ROW
@@ -836,7 +843,7 @@ const NewCoordination = () => {
 
     const [salesPerson, setSalesPerson] =
         useState(
-            bookingData?.coordinator_name || ''
+            bookingData?.sales_person_name || ''
         );
 
     const [activities, setActivities] =
@@ -861,9 +868,25 @@ const NewCoordination = () => {
         useState(false);
 
     const [loadingDetail, setLoadingDetail] = useState(false);
+    const [showSlotFullModal, setShowSlotFullModal] = useState(false);
+    const [slotFullMsg, setSlotFullMsg] = useState('');
     const [dateChanged, setDateChanged] = useState(false);
 
     const [monthModal, setMonthModal] = useState(false);
+
+    const [shoots, setShoots] = useState([]);
+    const [timeSlots, setTimeSlots] = useState([]);
+    const [prepAllDone, setPrepAllDone] = useState(false);
+    const [shootsDirty, setShootsDirty] = useState(false);
+    const [savedNotes, setSavedNotes] = useState('');
+    const [shootPickerIndex, setShootPickerIndex] = useState(null);
+    const [shootSlotModalIndex, setShootSlotModalIndex] = useState(null);
+    const [shootPhotographerModalIndex, setShootPhotographerModalIndex] = useState(null);
+
+    const updateShoot = (index, patch) => {
+        setShoots(prev => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+        setShootsDirty(true);
+    };
 
 
     const [showAllActivities, setShowAllActivities] = useState(false);
@@ -978,6 +1001,25 @@ const NewCoordination = () => {
         const photogList = data.photographers || [];
         const activityList = data.activities || [];
 
+        setTimeSlots((data.time_slots || []).map(s => ({
+            value: Number(s.slot_id),
+            label: s.label,
+            limit: s.slot_limit,
+        })));
+
+        setShoots((data.shoots || []).map(s => ({
+            shoot_id: String(s.shoot_id),
+            name: s.shoot_name || '',
+            tentative: String(s.is_tentative) === '1',
+            month: s.shoot_month || '',
+            date: parseYMD(s.shoot_date),
+            slot_id: s.slot_id ? Number(s.slot_id) : 0,
+            photographer_id: s.photographer_id ? Number(s.photographer_id) : 0,
+            photographer_name: s.photographer_name || '',
+        })));
+        setShootsDirty(false);
+        setPrepAllDone(!!coord.prep_all_done);
+
         const taskData = data.tasks || {};   // ✅ naam consistent kar diya
 
         setEditorTasks(
@@ -1012,64 +1054,17 @@ const NewCoordination = () => {
     se stale/purana aa sakta hai (jaise Client Requirements +
     Shoot Assignment complete hone ke baad bhi stage_no=3 aana).
    */
-        const apiCurrentStage =
-            (coord.current_stage || b.stage_name || '').trim().toLowerCase();
+        const flags = coord.stage_flags || {};
 
-        const apiSaysDone = apiCurrentStage === 'done';
-
-        const photographerDone =
-            apiSaysDone ||
-            String(assign.assignment_status || '').toLowerCase() === 'completed' ||
-            !!assign.completed_at;
-
-        const stageNotesForIndex = (
-            Array.isArray(coord.stage_notes) ? coord.stage_notes : []
-        ).map(n =>
-            n.stage === 'Shoot Assignment' && !photographerDone
-                ? { ...n, status: 'Pending' }
-                : n
-        );
-
-        const completedKeys = STAGES
-            .filter(s => {
-                const note = stageNotesForIndex.find(
-                    n => n.stage === s.label
-                );
-
-                return note && note.status === 'Completed';
-            })
-            .map(s => s.key);
-
-
-        // ✅ API agar current stage / stage name "Done" bhejti hai
-        // to Done ko bhi completed mark karo
-
-
-        if (apiCurrentStage === 'done' && photographerDone && !completedKeys.includes('done')) {
-            completedKeys.push('done');
-        }
-
+        const completedKeys = STAGES.filter(s => flags[s.label] === true).map(s => s.key);
         setCompletedStageKeys(completedKeys);
 
-        let computedIndex = null;
-
-        if (stageNotesForIndex.length) {
-            let idx = 0;
-
-            for (let i = 0; i < STAGES.length; i++) {
-                const note = stageNotesForIndex.find(
-                    n => n.stage === STAGES[i].label
-                );
-
-                if (note && note.status === 'Completed') {
-                    idx = i + 1;   // agla stage current ban jayega
-                } else {
-                    break;   // pehla incomplete stage mila, ruk jao
-                }
-            }
-
-            computedIndex = Math.min(idx, STAGES.length - 1);
+        let idx = 0;
+        for (let i = 0; i < STAGES.length; i++) {
+            if (flags[STAGES[i].label]) idx = i + 1;
+            else break;
         }
+        setStage(STAGES[Math.min(idx, STAGES.length - 1)].key);
 
         // const isCoordinator =
         //     (loginType || '').trim().toLowerCase() === 'coordinator';
@@ -1084,21 +1079,6 @@ const NewCoordination = () => {
         //     computedIndex = shootIdx;
         // }
 
-        if (computedIndex !== null) {
-            setStage(STAGES[computedIndex].key);
-        } else if (b.stage_no && STAGES[b.stage_no - 1]) {
-            setStage(STAGES[b.stage_no - 1].key);
-        } else if (coord.current_stage || b.stage_name) {
-
-            const matched = STAGES.find(
-                item =>
-                    item.label === (coord.current_stage || b.stage_name)
-            );
-
-            if (matched) {
-                setStage(matched.key);
-            }
-        }
 
         if (photogList.length) {
 
@@ -1113,18 +1093,12 @@ const NewCoordination = () => {
         setPhotographer(b.photographer_name || '');
         setPhotographerId(Number(b.photographer_id) || 0);
 
-        const shootAssignmentStageNote = (coord.stage_notes || []).find(
-            n => n.stage === 'Shoot Assignment'
+        const clientReqNote = (coord.stage_notes || []).find(
+            n => n.stage === 'Client Requirements'
         );
-
-        // 🔧 FIX: agar "Shoot Assignment" entry stage_notes me mil gayi,
-        // to uska notes hi use karo (empty string bhi valid value hai).
-        // assign.notes sirf tab use karo jab stage_notes me entry hi na ho.
-        setPhotographerNotes(
-            shootAssignmentStageNote
-                ? (shootAssignmentStageNote.notes || '')
-                : (assign.notes || '')
-        );
+        const reqNotes = clientReqNote?.notes ?? assign.notes ?? '';
+        setPhotographerNotes(reqNotes);
+        setSavedNotes(reqNotes);
 
         const validDate = (v) => (v && !String(v).startsWith('0000') ? v : null);
 
@@ -1135,7 +1109,7 @@ const NewCoordination = () => {
             validDate(b.shootDate) ||
             null;
 
-        setShootDate(getSafeDate(assignedDate));
+        setShootDate(parseYMD(assignedDate));
 
         setShootMonth(
             b.shoot_month ||
@@ -1203,7 +1177,7 @@ const NewCoordination = () => {
                 )
         );
 
-        setSalesPerson(b.coordinator_name || '');
+        setSalesPerson(b.sales_person_name || '');
 
         setActivities(
             activityList.map((a, index) => ({
@@ -1254,13 +1228,7 @@ const NewCoordination = () => {
 
 
     // NAYA:
-    const photographerEnabled = useMemo(
-        () =>
-            PREP_STAGES.every(item =>
-                confirmedPrepStages.includes(item.label)
-            ),
-        [confirmedPrepStages]
-    );
+    const photographerEnabled = prepAllDone;
 
 
     /* =====================================================
@@ -1399,143 +1367,129 @@ const NewCoordination = () => {
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const handleUpdate = async () => {
-
         if (!getClientId(bookingData)) {
-            Toast.show({
-                type: 'error',
-                text1: 'Booking ID not found',
-                position: 'bottom',
-                bottomOffset: 60,
-            });
+            Toast.show({ type: 'error', text1: 'Booking ID not found', position: 'bottom', bottomOffset: 60 });
+            return;
+        }
+        if (updatingStage || assigningPhotographer) return;
+
+        const clientId = Number(getClientId(bookingData));
+        const newlyCheckedStages = selectedPrepStages.filter(l => !confirmedPrepStages.includes(l));
+        const trimmedNotes = photographerNotes?.trim() || '';
+        const notesChanged = !!trimmedNotes && trimmedNotes !== (savedNotes || '').trim();
+        const shouldCallShootsApi = photographerEnabled && shootsDirty;
+
+        if (!newlyCheckedStages.length && !notesChanged && !shouldCallShootsApi) {
+            Toast.show({ type: 'error', text1: 'Nothing to update', position: 'bottom', bottomOffset: 60 });
             return;
         }
 
-        if (updatingStage || assigningPhotographer) return;
+        // shoots validation + body
+        const shootsBody = {};
+        if (shouldCallShootsApi) {
+            for (const s of shoots) {
+                if (!s.photographer_id) continue;               // photographer nahi chuna to skip
+                if (!s.date || !s.slot_id) {
+                    Toast.show({
+                        type: 'error',
+                        text1: `Select date and time slot for "${s.name || 'shoot'}"`,
+                        position: 'bottom', bottomOffset: 60,
+                    });
+                    return;
+                }
+                shootsBody[s.shoot_id] = {
+                    photographer_id: s.photographer_id,
+                    date: toYMD(s.date),
+                    slot_id: s.slot_id,
+                };
+            }
+            if (!Object.keys(shootsBody).length) {
+                Toast.show({ type: 'error', text1: 'Select photographer for at least one shoot', position: 'bottom', bottomOffset: 60 });
+                return;
+            }
+        }
 
         try {
             setUpdatingStage(true);
+            let errorMsg = '';
 
-            /* ---- 1) UPDATE STAGE API ---- */
-            const newlyCheckedStages = selectedPrepStages.filter(
-                label => !confirmedPrepStages.includes(label)
-            );
-
-            let stageOk = true;
-            let stageResult = null;
-
+            /* 1) STAGE UPDATE */
             if (newlyCheckedStages.length) {
-                const stagePayload = {
-                    client_id: Number(getClientId(bookingData)),
-                    admin_id: adminId,
-                    stages: newlyCheckedStages.map(label => ({
-                        stage: label,
+                const res = await fetch(API.update_stage, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        admin_id: adminId,
+                        stages: newlyCheckedStages.map(label => ({ stage: label, notes: '' })),
                         notes: '',
-                    })),
-                    notes: '',
-                };
-
-                console.log('UPDATE STAGE PAYLOAD:', JSON.stringify(stagePayload, null, 2));
-
-                const stageRes = await fetch(API.update_stage, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify(stagePayload),
+                    }),
                 });
-                stageResult = await stageRes.json();
-                console.log('UPDATE STAGE RESPONSE:', JSON.stringify(stageResult, null, 2));
-
-                stageOk = stageResult?.code == 200 && stageResult?.status === true;
+                const r = await res.json();
+                if (!(r?.code == 200 && r?.status === true)) errorMsg = r?.message || 'Failed to update stage';
             }
 
-            /* ---- 2) ASSIGN PHOTOGRAPHER API ----
-               Photographer, notes, ya date/month change hone par chalegi */
-            let photographerOk = true;
-            let photographerResult = null;
+            /* 2) CLIENT REQUIREMENTS (purana assign_photographer) */
+            if (!errorMsg && notesChanged) {
+                const res = await fetch(API.assign_photographer, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        photographer_id: Number(photographerId) || 0,
+                        booking_date: shootDate ? toYMD(shootDate) : '',
+                        shoot_month: shootDate ? '' : (shootMonth || ''),
+                        notes: trimmedNotes,
+                        admin_id: Number(adminId),
+                    }),
+                });
+                const r = await res.json();
+                if (!(r?.status === true || r?.status == 200 || r?.code == 200)) {
+                    errorMsg = r?.message || 'Failed to save client requirements';
+                }
+            }
 
-            const trimmedNotes = photographerNotes?.trim() || '';
-            const shouldCallPhotographerApi =
-                photographerId || trimmedNotes || dateChanged;
-
-            if (shouldCallPhotographerApi) {
+            /* 3) SHOOT-WISE PHOTOGRAPHERS (naya API) */
+            if (!errorMsg && shouldCallShootsApi) {
                 setAssigningPhotographer(true);
+                const body = { client_id: clientId, admin_id: Number(adminId), shoots: shootsBody };
+                console.log('ASSIGN SHOOT PHOTOGRAPHERS PAYLOAD:', JSON.stringify(body, null, 2));
 
-                const bookingDate = shootDate ? toYMD(shootDate) : '';
-
-                const photographerPayload = {
-                    client_id: Number(getClientId(bookingData)),
-                    photographer_id: Number(photographerId) || 0,
-                    booking_date: bookingDate,
-                    shoot_month: shootDate ? '' : (shootMonth || ''),
-                    notes: trimmedNotes,
-                    admin_id: Number(adminId),
-                };
-
-                console.log('ASSIGN PHOTOGRAPHER PAYLOAD:', photographerPayload);
-
-                const photographerRes = await fetch(API.assign_photographer, {
+                const res = await fetch(API.assign_shoot_photographers, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify(photographerPayload),
+                    body: JSON.stringify(body),
                 });
-                photographerResult = await photographerRes.json();
-                console.log('ASSIGN PHOTOGRAPHER RESPONSE:', photographerResult);
+                const r = await res.json();
+                console.log('ASSIGN SHOOT PHOTOGRAPHERS RESPONSE:', JSON.stringify(r));
 
-                photographerOk =
-                    photographerResult?.status === true ||
-                    photographerResult?.status == 200 ||
-                    photographerResult?.code == 200;
-
-                if (photographerOk) setDateChanged(false);
-
-                setAssigningPhotographer(false);
+                if (r?.status === true || r?.code == 200) setShootsDirty(false);
+                else errorMsg = r?.message || 'Failed to assign photographers';
             }
 
-            if (!newlyCheckedStages.length && !shouldCallPhotographerApi) {
+            if (errorMsg && /slot/i.test(errorMsg)) {
+                // slot full -> modal
+                setSlotFullMsg(errorMsg);
+                setShowSlotFullModal(true);
+            } else {
                 Toast.show({
-                    type: 'error',
-                    text1: 'Nothing to update',
-                    position: 'bottom',
-                    bottomOffset: 60,
-                });
-                setUpdatingStage(false);
-                return;
-            }
-
-            /* ---- TOAST ---- */
-            if (stageOk && photographerOk) {
-                Toast.show({
-                    type: 'success',
-                    text1: 'Updated Successfully',
-                    position: 'bottom',
-                    bottomOffset: 60,
-                });
-            } else if (!stageOk) {
-                Toast.show({
-                    type: 'error',
-                    text1: stageResult?.message || 'Failed to update stage',
-                    position: 'bottom',
-                    bottomOffset: 60,
-                });
-            } else if (!photographerOk) {
-                Toast.show({
-                    type: 'error',
-                    text1: photographerResult?.message || 'Failed to assign photographer',
+                    type: errorMsg ? 'error' : 'success',
+                    text1: errorMsg || 'Updated Successfully',
                     position: 'bottom',
                     bottomOffset: 60,
                 });
             }
 
+            // ✅ error par user ki shoot selection wapas rakho
+            const keepShoots = errorMsg && shouldCallShootsApi ? shoots : null;
             await fetchBookingDetail(adminId);
-
+            if (keepShoots) {
+                setShoots(keepShoots);
+                setShootsDirty(true);
+            }
         } catch (error) {
             console.log('Update Error:', error);
-            Toast.show({
-                type: 'error',
-                text1: 'Network Error',
-                text2: 'Unable to update',
-                position: 'bottom',
-                bottomOffset: 60,
-            });
+            Toast.show({ type: 'error', text1: 'Network Error', text2: 'Unable to update', position: 'bottom', bottomOffset: 60 });
         } finally {
             setUpdatingStage(false);
             setAssigningPhotographer(false);
@@ -1904,7 +1858,8 @@ const NewCoordination = () => {
                                 index={index}
                                 currentStageIndex={currentStageIndex}
                                 completedStageKeys={completedStageKeys}
-                                onPress={isPhotographer ? () => { } : handleStageChange}
+                                // onPress={isPhotographer ? () => { } : handleStageChange}
+                                onPress={() => { }}
                             />
                         )}
                     />
@@ -2114,7 +2069,7 @@ const NewCoordination = () => {
                                         st.lockedText
                                     }
                                 >
-                                    {salesPerson || 'Arjun'}
+                                    {salesPerson || '---'}
                                 </Text>
 
                                 <Icon
@@ -2127,105 +2082,92 @@ const NewCoordination = () => {
 
                             {/* PHOTOGRAPHER (merged from separate card) */}
 
-
-                            <SelectRow
-                                label="Assign Photographer"
-                                value={photographer}
-                                placeholder="Select Photographer"
-                                leftIcon="camera-outline"
-                                onPress={() => setPhotographerModal(true)}
-                                disabled={!photographerEnabled}
-                                disabledHint="Complete all 4 preparation stages (Concept, Outfit, Props, Package) first."
-                            />
-
+                            {/* SHOOT-WISE PHOTOGRAPHER ASSIGNMENT */}
                             <Text style={st.fieldLabelTop}>
-                                Shoot Date{' '}
-
+                                Photographer Assignment
                             </Text>
+                            {!photographerEnabled && (
+                                <Text style={st.disabledHint}>
+                                    Complete all 4 preparation stages (Concept, Outfit, Props, Package) first.
+                                </Text>
+                            )}
 
-                            {(() => {
-                                const isTentative = !shootDate && !!shootMonth;
+                            {shoots.map((s, i) => {
+                                const slotLabel = timeSlots.find(x => x.value === s.slot_id)?.label || '';
+                                const dateText = s.date
+                                    ? fmtDisplay(s.date)
+                                    : s.tentative && s.month
+                                        ? `${s.month} (Tentative)`
+                                        : '';
+                                const locked = !photographerEnabled;
 
                                 return (
-                                    <>
+                                    <View
+                                        key={s.shoot_id}
+                                        style={{ borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 10, marginTop: 10, backgroundColor: '#fafbfc' }}
+                                    >
+                                        <Text style={{ fontSize: 12.5, fontFamily: Fonts.Bold, color: '#1e293b', textTransform: 'capitalize' }}>
+                                            {i + 1}. {s.name || 'Shoot'}
+                                        </Text>
+                                        {s.tentative && !s.date ? (
+                                            <Text style={st.disabledHint}>
+                                                Tentative: {s.month || '--'} (select exact date to confirm)
+                                            </Text>
+                                        ) : null}
+
+                                        {/* Photographer */}
+                                        <SelectRow
+                                            label="Photographer"
+                                            value={s.photographer_name}
+                                            placeholder="Select Photographer"
+                                            leftIcon="camera-outline"
+                                            onPress={() => setShootPhotographerModalIndex(i)}
+                                            disabled={locked}
+                                        />
+
+                                        {/* Shoot Date */}
+                                        <Text style={st.fieldLabel}>Shoot Date</Text>
                                         <TouchableOpacity
-                                            style={st.dateBox}
-                                            onPress={() =>
-                                                isTentative
-                                                    ? setMonthModal(true)      // tentative -> month modal
-                                                    : setShowDatePicker(true)  // asli date -> date picker
-                                            }
-                                            activeOpacity={0.8}
+                                            style={[st.dateBox, locked && st.selectBoxDisabled]}
+                                            onPress={() => !locked && setShootPickerIndex(i)}
+                                            activeOpacity={locked ? 1 : 0.8}
                                         >
                                             <View style={st.selectBoxInner}>
-                                                <Icon
-                                                    name={isTentative ? 'calendar-month-outline' : 'calendar-blank-outline'}
-                                                    size={17}
-                                                    color={Colors.buttonbgcolor}
-                                                    style={{ marginRight: 7 }}
-                                                />
-                                                <Text
-                                                    style={[
-                                                        st.selectText,
-                                                        !(shootDate || shootMonth || apiBooking?.booking_date) && st.selectTextPlaceholder,
-                                                    ]}
-                                                >
-                                                    {shootDate
-                                                        ? fmtDisplay(shootDate)
-                                                        : shootMonth
-                                                            ? shootMonth
-                                                            : apiBooking?.booking_date
-                                                                ? fmtDisplay(getSafeDate(apiBooking.booking_date))
-                                                                : 'Select shoot date'}
+                                                <Icon name="calendar-blank-outline" size={17} color={locked ? '#94a3b8' : Colors.buttonbgcolor} style={{ marginRight: 7 }} />
+                                                <Text style={[st.selectText, !dateText && st.selectTextPlaceholder]}>
+                                                    {dateText || 'Select date'}
                                                 </Text>
                                             </View>
                                             <Icon name="chevron-down" size={17} color="#94a3b8" />
                                         </TouchableOpacity>
 
-                                        {isTentative && (
-                                            <View
-                                                style={{
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'space-between',
-                                                    marginTop: 4,
-                                                }}
-                                            >
-                                                <Text style={st.disabledHint}>Tentative month — tap to change</Text>
-
-                                                <TouchableOpacity onPress={() => setShowDatePicker(true)}>
-                                                    <Text
-                                                        style={{
-                                                            fontSize: 10.5,
-                                                            fontFamily: Fonts.Bold,
-                                                            color: Colors.buttonbgcolor,
-                                                        }}
-                                                    >
-                                                        Set exact date
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            </View>
-                                        )}
-
-                                        {showDatePicker && (
-                                            <DateTimePicker
-                                                value={shootDate || getSafeDate(apiBooking?.booking_date) || new Date()}
-                                                mode="date"
-                                                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                                                onChange={onShootDateChange}
-                                            />
-                                        )}
-                                    </>
+                                        {/* Time Slot */}
+                                        <SelectRow
+                                            label="Time Slot"
+                                            value={slotLabel}
+                                            placeholder="Select time slot"
+                                            leftIcon="clock-outline"
+                                            onPress={() => setShootSlotModalIndex(i)}
+                                            disabled={locked}
+                                        />
+                                    </View>
                                 );
-                            })()}
+                            })}
 
-
-
+                            {shootPickerIndex !== null && (
+                                <DateTimePicker
+                                    value={shoots[shootPickerIndex]?.date || new Date()}
+                                    mode="date"
+                                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                    onChange={(event, selected) => {
+                                        const i = shootPickerIndex;
+                                        setShootPickerIndex(null);
+                                        if (event.type === 'set' && selected) updateShoot(i, { date: selected });
+                                    }}
+                                />
+                            )}
                             <TouchableOpacity
-                                style={[
-                                    st.saveBtn,
-                                    (updatingStage || assigningPhotographer) && st.saveBtnDisabled,
-                                ]}
+                                style={[st.saveBtn, (updatingStage || assigningPhotographer) && st.saveBtnDisabled]}
                                 onPress={handleUpdate}
                                 disabled={updatingStage || assigningPhotographer}
                                 activeOpacity={0.85}
@@ -2659,35 +2601,67 @@ const NewCoordination = () => {
                PHOTOGRAPHER MODAL
             ================================================= */}
 
+            {/* Photographer (shoot-wise) */}
             <SelectModal
-                visible={
-                    photographerModal
-                }
-                onClose={() =>
-                    setPhotographerModal(
-                        false
-                    )
-                }
+                visible={shootPhotographerModalIndex !== null}
+                onClose={() => setShootPhotographerModalIndex(null)}
                 title="Select Photographer"
                 data={photographersList}
-                selected={
-                    photographerId
-                }
+                selected={shoots[shootPhotographerModalIndex]?.photographer_id}
                 onSelect={(id) => {
-
-                    const selected =
-                        photographersList.find(
-                            item =>
-                                item.value === id
-                        );
-
-                    setPhotographerId(id);
-
-                    setPhotographer(
-                        selected?.label || ''
-                    );
+                    const p = photographersList.find(x => x.value === id);
+                    updateShoot(shootPhotographerModalIndex, { photographer_id: id, photographer_name: p?.label || '' });
                 }}
             />
+
+            {/* Time slot (shoot-wise, slot limit ke saath) */}
+            <SelectModal
+                visible={shootSlotModalIndex !== null}
+                onClose={() => setShootSlotModalIndex(null)}
+                title="Select Time Slot"
+                data={timeSlots.map(s => ({
+                    value: s.value,
+                    label: `${s.label}  (${s.limit} ${Number(s.limit) === 1 ? 'slot' : 'slots'})`,
+                }))}
+                selected={shoots[shootSlotModalIndex]?.slot_id}
+                onSelect={(id) => updateShoot(shootSlotModalIndex, { slot_id: id })}
+            />
+            {/* ── SLOT FULL MODAL ── */}
+            <Modal
+                visible={showSlotFullModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowSlotFullModal(false)}
+            >
+                <View style={st.modalOverlay}>
+                    <View style={st.confirmModal}>
+                        <TouchableOpacity
+                            style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, padding: 6 }}
+                            onPress={() => setShowSlotFullModal(false)}
+                        >
+                            <Icon name="close" size={20} color="#64748b" />
+                        </TouchableOpacity>
+
+                        <View style={st.confirmIconWrap}>
+                            <Icon name="clock-alert-outline" size={40} color={Colors.buttonbgcolor} />
+                        </View>
+
+                        <Text style={st.confirmTitle}>Slot Full</Text>
+                        <Text style={st.confirmMsg}>
+                            {slotFullMsg}
+                            {'\n\n'}
+                            Please dusra slot select karein.
+                        </Text>
+
+                        <TouchableOpacity
+                            style={st.confirmBtn}
+                            onPress={() => setShowSlotFullModal(false)}
+                        >
+                            <Text style={st.confirmBtnText}>OK</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
 
         </KeyboardAvoidingView>
     );
@@ -3297,6 +3271,52 @@ const st = StyleSheet.create({
     modalItemTextSel: {
         fontFamily: Fonts.Bold,
         color: Colors.buttonbgcolor,
+    },
+
+    confirmModal: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        width: '85%',
+        paddingHorizontal: 24,
+        paddingVertical: 28,
+        alignItems: 'center',
+    },
+    confirmIconWrap: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: '#fff3f3',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    confirmTitle: {
+        fontSize: 17,
+        fontFamily: Fonts.Bold,
+        color: '#1e293b',
+        textAlign: 'center',
+        marginBottom: 10,
+    },
+    confirmMsg: {
+        fontSize: 13,
+        fontFamily: Fonts.Regular,
+        color: '#475569',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 24,
+    },
+    confirmBtn: {
+        width: '100%',
+        height: 46,
+        borderRadius: 10,
+        backgroundColor: Colors.buttonbgcolor,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    confirmBtnText: {
+        fontSize: 14,
+        fontFamily: Fonts.Bold,
+        color: '#fff',
     },
 
 });

@@ -99,6 +99,8 @@ const API = {
   update_booking: `${BASE_URL}booking/update_booking.php`,
   sent_otp: `${BASE_URL}booking/sent_otp.php`,
   verify_otp: `${BASE_URL}booking/verify_otp.php`,
+  list_slot: `${BASE_URL}booking/list_slots.php`,
+
 
   // Calendar
   list_calendar: `${BASE_URL}calendar/list_calender.php`,
@@ -130,6 +132,8 @@ const API = {
   // Coordination
   assign_photographer: `${BASE_URL}coordination/assign_photographer.php`,
   update_stage: `${BASE_URL}coordination/coordination_update_stage.php`,
+  assign_shoot_photographers: `${BASE_URL}coordination/assign_shoot_photographers.php`,
+
 
 
   // Coordination

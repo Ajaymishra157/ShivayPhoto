@@ -248,6 +248,113 @@ const Chip = ({ icon, label, value, color }) => (
 const getCoordinationStatus = item =>
     item.coordination_status || item.current_stage || '-';
 
+
+// "24-09-2026" -> Date
+const parseDMY = (s) => {
+    const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(String(s || '').trim());
+    return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
+};
+
+// aaj se pehle ki shoot = laal
+const isPastShoot = (s) => {
+    const d = parseDMY(s?.date);
+    if (!d) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return d < today;
+};
+
+// multi photographer ho to unique naam, warna purana single naam
+const getPhotographerNames = (item) => {
+    const names = [...new Set((item.shoots || []).map(s => s.photographer).filter(Boolean))];
+    if (names.length) return names.join(', ');
+    return item.photographer_name || 'Not Assigned';
+};
+
+const ShootsBlock = ({ shoots, accent, max = 3 }) => {
+    const [expanded, setExpanded] = useState(false);
+
+    if (!Array.isArray(shoots) || shoots.length === 0) return null;
+
+    const visible = expanded ? shoots : shoots.slice(0, max);
+    const extra = shoots.length - max;
+
+    return (
+        <View style={{ marginTop: 9, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: '#EEF0F2' }}>
+            {visible.map((s, i) => {
+                const past = isPastShoot(s);
+                const dateColor = past ? '#DC2626' : '#475569';
+
+                return (
+                    <View
+                        key={i}
+                        style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 5 }}
+                    >
+                        {/* Date */}
+                        <Icon name="calendar-outline" size={11} color={past ? '#DC2626' : accent} />
+                        <Text style={{ fontSize: 10.5, fontFamily: 'Inter-Bold', color: dateColor, marginLeft: 4 }}>
+                            {s.date || '--'}
+                        </Text>
+
+                        {/* Time slot */}
+                        {!!s.time && (
+                            <View
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: '#F1F5F9',
+                                    borderRadius: 8,
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 2,
+                                    marginLeft: 6,
+                                }}
+                            >
+                                <Icon name="clock-outline" size={10} color="#64748B" />
+                                <Text style={{ fontSize: 9.5, fontFamily: Fonts.Regular, color: '#475569', marginLeft: 3 }}>
+                                    {s.time}
+                                </Text>
+                            </View>
+                        )}
+
+                        {/* Shoot name */}
+                        {!!s.name && (
+                            <Text
+                                numberOfLines={1}
+                                style={{ fontSize: 10, fontFamily: Fonts.Regular, color: '#94A3B8', marginLeft: 6, textTransform: 'capitalize' }}
+                            >
+                                • {s.name}
+                            </Text>
+                        )}
+
+                        {/* Photographer */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
+                            <Icon name="camera-outline" size={10} color={s.photographer ? '#8B5CF6' : '#CBD5E1'} />
+                            <Text
+                                style={{
+                                    fontSize: 9.5,
+                                    fontFamily: Fonts.Regular,
+                                    color: s.photographer ? '#475569' : '#CBD5E1',
+                                    marginLeft: 3,
+                                    textTransform: 'capitalize',
+                                }}
+                            >
+                                {s.photographer || 'Not assigned'}
+                            </Text>
+                        </View>
+                    </View>
+                );
+            })}
+
+            {extra > 0 && (
+                <TouchableOpacity onPress={() => setExpanded(p => !p)} activeOpacity={0.7}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Inter-Bold', color: accent }}>
+                        {expanded ? 'Show less' : `+${extra} more`}
+                    </Text>
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+};
 /* ══════════════ Branch picker modal ══════════════ */
 const BranchModal = ({ visible, onClose, list, selected, onSelect, loading }) => {
     const [q, setQ] = useState('');
@@ -366,12 +473,16 @@ const ShootRow = ({ item, accent }) => (
             </View>
         </View>
 
+        <ShootsBlock shoots={item.shoots} accent={accent} />
+
         <View style={styles.chipsRow}>
-            <Chip icon="calendar-month-outline" label="Booking Date" value={formatDate(item.booking_date || item.shoot_date || item.event_date || item.date)} color={accent} />
+            {(!item.shoots || item.shoots.length === 0) && (
+                <Chip icon="calendar-month-outline" label="Booking Date" value={formatDate(item.booking_date)} color={accent} />
+            )}
             <Chip icon="tag-outline" label="Event" value={item.purpose || '-'} color={accent} />
             <Chip icon="account-tie-outline" label="Sales Person" value={item.sales_person_name || '-'} color="#F59E0B" />
             <Chip icon="account-outline" label="Coordinator" value={item.coordinator_name || 'Not Assigned'} color="#0EA5E9" />
-            <Chip icon="camera-outline" label="Photographer" value={item.photographer_name || 'Not Assigned'} color="#8B5CF6" />
+            <Chip icon="camera-outline" label="Photographer" value={getPhotographerNames(item)} color="#8B5CF6" />
             <Chip
                 icon="progress-check"
                 label="Coordination Status"

@@ -51,6 +51,118 @@ const bucketStyle = bucket => {
     }
 };
 
+// "24-09-2026" -> Date
+const parseDMY = (s) => {
+    const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(String(s || '').trim());
+    return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
+};
+
+// "24-09-2026" -> "2026-09-24" (date filter ke liye)
+const dmyToYMD = (s) => {
+    const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(String(s || '').trim());
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+};
+
+// aaj se pehle ki shoot = laal
+const isPastShoot = (s) => {
+    const d = parseDMY(s?.date);
+    if (!d) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return d < today;
+};
+
+// unique photographer naam (multi photographer ke liye)
+const getPhotographerList = (item) => {
+    const names = [...new Set((item.shoots || []).map(s => s.photographer).filter(Boolean))];
+    if (names.length) return names;
+    const single = (item.photographer_name || '').trim();
+    return single ? [single] : [];
+};
+
+const ShootsBlock = ({ shoots, accent = '#6366F1', max = 3 }) => {
+    const [expanded, setExpanded] = useState(false);
+
+    if (!Array.isArray(shoots) || shoots.length === 0) return null;
+
+    const visible = expanded ? shoots : shoots.slice(0, max);
+    const extra = shoots.length - max;
+
+    return (
+        <View style={{ marginBottom: 4 }}>
+            <Text style={labelStyle}>SHOOTS</Text>
+
+            {visible.map((s, i) => {
+                const past = isPastShoot(s);
+                const dateColor = past ? '#DC2626' : '#555265';
+
+                return (
+                    <View
+                        key={i}
+                        style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}
+                    >
+                        <Icon name="calendar-outline" size={11} color={past ? '#DC2626' : accent} />
+                        <Text style={{ fontFamily: Fonts.Bold, fontSize: 10.5, color: dateColor, marginLeft: 4 }}>
+                            {s.date || '--'}
+                        </Text>
+
+                        {!!s.time && (
+                            <View
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: '#F1F5F9',
+                                    borderRadius: 8,
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 2,
+                                    marginLeft: 6,
+                                }}
+                            >
+                                <Icon name="clock-outline" size={10} color="#64748B" />
+                                <Text style={{ fontFamily: Fonts.Regular, fontSize: 9.5, color: '#475569', marginLeft: 3 }}>
+                                    {s.time}
+                                </Text>
+                            </View>
+                        )}
+
+                        {!!s.name && (
+                            <Text
+                                numberOfLines={1}
+                                style={{ fontFamily: Fonts.Regular, fontSize: 10, color: '#94A3B8', marginLeft: 6, textTransform: 'capitalize' }}
+                            >
+                                • {s.name}
+                            </Text>
+                        )}
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
+                            <Icon name="camera-outline" size={10} color={s.photographer ? '#8B5CF6' : '#CBD5E1'} />
+                            <Text
+                                style={{
+                                    fontFamily: Fonts.Regular,
+                                    fontSize: 9.5,
+                                    color: s.photographer ? '#475569' : '#CBD5E1',
+                                    marginLeft: 3,
+                                    textTransform: 'capitalize',
+                                }}
+                            >
+                                {s.photographer || 'Not assigned'}
+                            </Text>
+                        </View>
+                    </View>
+                );
+            })}
+
+            {extra > 0 && (
+                <TouchableOpacity onPress={() => setExpanded(p => !p)} activeOpacity={0.7} style={{ marginTop: 5 }}>
+                    <Text style={{ fontFamily: Fonts.Bold, fontSize: 10, color: accent }}>
+                        {expanded ? 'Show less' : `+${extra} more`}
+                    </Text>
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+};
+
 const Stat = ({ icon, label, value, color, style }) => (
     <View
         style={[
@@ -154,13 +266,18 @@ const CoordinationSummary = () => {
 
         return list.filter(item => {
             // Booking date filter
-            if (selectedYMD && toYMD(item.booking_date) !== selectedYMD) {
-                return false;
+            if (selectedYMD) {
+                const dates = (item.shoots || []).map(s => dmyToYMD(s.date)).filter(Boolean);
+                const matched = dates.length
+                    ? dates.includes(selectedYMD)
+                    : toYMD(item.booking_date) === selectedYMD;
+                if (!matched) return false;
             }
 
             // Search filter
             if (!q) return true;
-            return `${item.order_no} ${item.client_name} ${item.mobile_no} ${item.coordinator_name} ${item.photographer_name} ${item.purpose} ${item.city}`
+            const shootText = (item.shoots || []).map(s => `${s.name} ${s.photographer}`).join(' ');
+            return `${item.order_no} ${item.client_name} ${item.mobile_no} ${item.coordinator_name} ${item.photographer_name} ${shootText} ${item.purpose} ${item.city}`
                 .toLowerCase()
                 .includes(q);
         });
@@ -335,9 +452,7 @@ const CoordinationSummary = () => {
             ) : (
                 filteredList.map((item, index) => {
                     const b = bucketStyle(item.bucket);
-                    const photographer =
-                        (item.photographer_name || '').trim() ||
-                        (item.photographer_assigned ? 'Assigned' : 'Not Assigned');
+                    const photographers = getPhotographerList(item);
 
                     return (
                         <View
@@ -403,14 +518,9 @@ const CoordinationSummary = () => {
                             </View>
 
                             <View style={{ height: 0.6, backgroundColor: '#ECE9F3', marginVertical: 9 }} />
+                            <ShootsBlock shoots={item.shoots} />
 
-                            <View style={{ flexDirection: 'row' }}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={labelStyle}>SHOOT DATE</Text>
-                                    <Text style={valueStyle} numberOfLines={1}>
-                                        {formatDate(item.booking_date)}
-                                    </Text>
-                                </View>
+                            <View style={{ flexDirection: 'row', marginTop: 5 }}>
                                 <View style={{ flex: 1 }}>
                                     <Text style={labelStyle}>PURPOSE</Text>
                                     <Text style={valueStyle} numberOfLines={1}>
@@ -421,6 +531,12 @@ const CoordinationSummary = () => {
                                     <Text style={labelStyle}>DAYS LEFT</Text>
                                     <Text style={valueStyle}>{item.diff_days ?? '-'}</Text>
                                 </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={labelStyle}>CITY</Text>
+                                    <Text style={valueStyle} numberOfLines={1}>
+                                        {item.city || 'N/A'}
+                                    </Text>
+                                </View>
                             </View>
 
                             <View style={{ flexDirection: 'row', marginTop: 9 }}>
@@ -430,25 +546,16 @@ const CoordinationSummary = () => {
                                         {(item.coordinator_name || '').trim() || 'Unassigned'}
                                     </Text>
                                 </View>
-                                <View style={{ flex: 1 }}>
+                                <View style={{ flex: 2 }}>
                                     <Text style={labelStyle}>PHOTOGRAPHER</Text>
                                     <Text
                                         style={[
                                             valueStyle,
-                                            {
-                                                textTransform: 'capitalize',
-                                                color: item.photographer_assigned ? '#16A34A' : '#D97706',
-                                            },
+                                            { textTransform: 'capitalize', color: photographers.length ? '#16A34A' : '#D97706' },
                                         ]}
                                         numberOfLines={1}
                                     >
-                                        {photographer}
-                                    </Text>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={labelStyle}>CITY</Text>
-                                    <Text style={valueStyle} numberOfLines={1}>
-                                        {item.city || 'N/A'}
+                                        {photographers.length ? photographers.join(', ') : 'Not Assigned'}
                                     </Text>
                                 </View>
                             </View>

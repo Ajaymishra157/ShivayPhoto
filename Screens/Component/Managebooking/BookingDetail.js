@@ -37,6 +37,15 @@ const formatBookingValue = (val) => {
     return val;
 };
 
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// "2026-11-20" -> "20 Nov, 2026"
+const formatShootDate = (d) => {
+    if (!d) return '';
+    const [y, m, day] = d.split('-');
+    return `${day} ${MONTH_SHORT[Number(m) - 1]}, ${y}`;
+};
+
 const InfoRow = ({ icon, label, value }) => (
     <View style={{
         flexDirection: 'row',
@@ -285,9 +294,11 @@ const BookingDetail = ({ navigation, route }) => {
                 receive_amount: data.receive_amount,
                 coordinator_id: newCoordinatorId,
                 added_by: data.added_by,
-                booking_status: data.booking_status,
-                booking_date: data.booking_status === 'Check' ? '' : data.booking,
-                shoot_month: data.booking_status === 'Check' ? data.booking : '',
+                shoots: (data.shoots || []).map(s =>
+                    String(s.tentative) === '1'
+                        ? { tentative: 1, month: s.month, name: s.name }
+                        : { tentative: 0, date: s.date, slot_id: s.slot_id, name: s.name }
+                ),
             };
 
             const res = await fetch(API.update_booking, {
@@ -420,7 +431,7 @@ const BookingDetail = ({ navigation, route }) => {
                     <SectionCard title="Booking Info">
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                             <HalfRow icon="account-outline" label="Added By" value={data.added_by_name} />
-                            <HalfRow
+                            {/* <HalfRow
                                 icon="calendar-outline"
                                 label={
                                     /^\d{4}-\d{2}-\d{2}$/.test(data.booking || '')
@@ -428,10 +439,82 @@ const BookingDetail = ({ navigation, route }) => {
                                         : 'Booking Month'
                                 }
                                 value={formatBookingValue(data.booking)}
-                            />
+                            /> */}
                             <HalfRow icon="check-circle-outline" label="Status" value={data.booking_status} />
                             <HalfRow icon="clock-outline" label="Entry On" value={formatDateTime(data.entry_date)} />
                         </View>
+                    </SectionCard>
+
+
+                    {/* SHOOTS */}
+                    <SectionCard title={`Shoots${data.shoots?.length ? ` (${data.shoots.length})` : ''}`}>
+                        {Array.isArray(data.shoots) && data.shoots.length > 0 ? (
+                            data.shoots.map((s, i) => {
+                                const isTentative = String(s.tentative) === '1';
+                                const isLast = i === data.shoots.length - 1;
+                                return (
+                                    <View
+                                        key={i}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 12,
+                                            paddingVertical: 10,
+                                            borderBottomWidth: isLast ? 0 : 0.5,
+                                            borderBottomColor: '#f1f5f9',
+                                        }}
+                                    >
+                                        {/* Number */}
+                                        <View style={{
+                                            width: 28, height: 28, borderRadius: 14,
+                                            backgroundColor: Colors.buttonbgcolor + '12',
+                                            justifyContent: 'center', alignItems: 'center',
+                                        }}>
+                                            <Text style={{ fontSize: 12, fontFamily: 'Inter-Bold', color: Colors.buttonbgcolor }}>
+                                                {i + 1}
+                                            </Text>
+                                        </View>
+
+                                        <View style={{ flex: 1 }}>
+                                            {/* Shoot name */}
+                                            {s.name ? (
+                                                <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', color: '#1e293b', textTransform: 'capitalize' }}>
+                                                    {s.name}
+                                                </Text>
+                                            ) : null}
+
+                                            {/* Date / Month */}
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: s.name ? 3 : 0 }}>
+                                                <Icon name="calendar-blank-outline" size={13} color="#64748b" />
+                                                <Text style={{ fontSize: 12, fontFamily: Fonts.Regular, color: '#475569' }}>
+                                                    {isTentative
+                                                        ? `${s.month || '--'} (Tentative)`
+                                                        : formatShootDate(s.date) || '--'}
+                                                </Text>
+                                            </View>
+
+                                            {/* Time slot */}
+                                            {s.time_slot ? (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                                                    <Icon name="clock-outline" size={13} color="#64748b" />
+                                                    <Text style={{ fontSize: 12, fontFamily: Fonts.Regular, color: '#475569' }}>
+                                                        {s.time_slot}
+                                                    </Text>
+                                                </View>
+                                            ) : null}
+                                        </View>
+
+                                        {isTentative && (
+                                            <View style={{ backgroundColor: '#fef3c7', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
+                                                <Text style={{ fontSize: 9, fontFamily: 'Inter-Bold', color: '#b45309' }}>Tentative</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                );
+                            })
+                        ) : (
+                            <Text style={{ fontSize: 12, fontFamily: Fonts.Regular, color: '#94a3b8' }}>No shoots added</Text>
+                        )}
                     </SectionCard>
 
 

@@ -45,6 +45,16 @@ const formatDateTime = (dateString) => {
     return `${day}-${month}-${year} ${hours}:${minutes} ${ampm}`;
 };
 
+
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MAX_SHOOTS = 3; // card mein max itni shoots dikhengi, baaki "+N more"
+
+// "2026-11-20" -> "20 Nov, 26"
+const formatShootDate = (d) => {
+    if (!d) return '';
+    const [y, m, day] = d.split('-');
+    return `${day} ${MONTH_SHORT[Number(m) - 1]}, ${y.slice(-2)}`;
+};
 const Bookinglist = ({ navigation }) => {
     const [bookings, setBookings] = useState([]);
     const [filtered, setFiltered] = useState([]);
@@ -133,7 +143,8 @@ const Bookinglist = ({ navigation }) => {
                 (b.client_name || '').toLowerCase().includes(q) ||
                 (b.client_mobile || '').toLowerCase().includes(q) ||
                 (b.client_address || '').toLowerCase().includes(q) ||
-                (b.order_no || '').toString().toLowerCase().includes(q)
+                (b.order_no || '').toString().toLowerCase().includes(q) ||
+                (b.shoots || []).some(s => (s.name || '').toLowerCase().includes(q))
             )
         );
     };
@@ -314,6 +325,60 @@ const Bookinglist = ({ navigation }) => {
                     {" "}{item.client_address || '--'}
                 </Text>
             </Text>
+
+            {/* SHOOTS (date + time slot) */}
+            {Array.isArray(item.shoots) && item.shoots.length > 0 && (
+                <View style={{ marginTop: 6, paddingRight: 40 }}>
+                    <Text style={{ fontSize: 12, color: '#2c3e50', fontFamily: 'Inter-Bold' }}>
+                        Shoots :
+                    </Text>
+
+                    {item.shoots.slice(0, MAX_SHOOTS).map((s, i) => {
+                        const isTentative = String(s.tentative) === '1';
+                        return (
+                            <View
+                                key={i}
+                                style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 4, gap: 6 }}
+                            >
+                                {/* Date / Month */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Icon name="calendar-blank-outline" size={13} color="#64748b" />
+                                    <Text style={{ fontSize: 12, color: '#475569', fontFamily: 'Inter-Regular' }}>
+                                        {isTentative ? `${s.month || '--'} (Tentative)` : formatShootDate(s.date) || '--'}
+                                    </Text>
+                                </View>
+
+                                {/* Time slot */}
+                                {s.time_slot ? (
+                                    <View style={{
+                                        flexDirection: 'row', alignItems: 'center', gap: 3,
+                                        backgroundColor: '#f1f5f9', borderRadius: 10,
+                                        paddingHorizontal: 7, paddingVertical: 2,
+                                    }}>
+                                        <Icon name="clock-outline" size={12} color="#64748b" />
+                                        <Text style={{ fontSize: 10.5, color: '#475569', fontFamily: 'Inter-Regular' }}>
+                                            {s.time_slot}
+                                        </Text>
+                                    </View>
+                                ) : null}
+
+                                {/* Shoot name */}
+                                {s.name ? (
+                                    <Text style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'Inter-Regular' }}>
+                                        • {s.name}
+                                    </Text>
+                                ) : null}
+                            </View>
+                        );
+                    })}
+
+                    {item.shoots.length > MAX_SHOOTS && (
+                        <Text style={{ fontSize: 11, color: Colors.buttonbgcolor, fontFamily: 'Inter-Bold', marginTop: 4 }}>
+                            +{item.shoots.length - MAX_SHOOTS} more
+                        </Text>
+                    )}
+                </View>
+            )}
 
             {/* ENTRY DATE */}
             <Text style={{ marginTop: 5 }}>

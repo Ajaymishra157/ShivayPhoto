@@ -87,6 +87,7 @@ const PhotographerDashboard = ({ hideBack: hideBackProp }) => {
             item =>
                 item.client.toLowerCase().includes(q) ||
                 item.event.toLowerCase().includes(q) ||
+                item.shootName.toLowerCase().includes(q) ||   // 🆕
                 item.id.toLowerCase().includes(q)
         );
     }, [todayShoots, searchQuery]);
@@ -178,13 +179,17 @@ const PhotographerDashboard = ({ hideBack: hideBackProp }) => {
 
                 const mappedShoots = (sourceList || []).map(item => ({
                     id: String(item.order_no ?? ''),
+                    shootId: String(item.shoot_id ?? ''),          // 🆕
                     clientId: String(item.client_id ?? ''),
                     client: item.client_name ?? '-',
                     phone: item.mobile_no ?? '',
                     event: item.event ?? '-',
+                    shootName: item.shoot_name ?? '',              // 🆕
+                    startTime: item.start_time ?? '',              // 🆕
+                    endTime: item.end_time ?? '',                  // 🆕
                     coordinator: item.coordinator_name ?? '-',
                     status: item.assignment_status ?? 'Pending',
-                    bookingDate: item.booking_date ?? '',   // 🆕 upcoming ke liye
+                    bookingDate: item.booking_date ?? '',
                 }));
 
                 setTodayShoots(mappedShoots);
@@ -527,6 +532,80 @@ const PhotographerDashboard = ({ hideBack: hideBackProp }) => {
                         </Text>
                     </View>
                 </View>
+
+                {/* SHOOT NAME + TIME */}
+                {(!!item.shootName || !!item.startTime) && (
+                    <View
+                        style={{
+                            flexDirection: 'row',
+                            marginTop: 7,
+                            paddingTop: 6,
+                            borderTopWidth: 0.5,
+                            borderTopColor: '#edf0f2',
+                        }}
+                    >
+                        {/* SHOOT NAME */}
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                            <Text
+                                style={{
+                                    color: '#9aa0a6',
+                                    fontFamily: Fonts.Regular,
+                                    fontSize: 9,
+                                }}
+                            >
+                                Shoot Name
+                            </Text>
+
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                <Icon name="camera-outline" size={11} color="#8B5CF6" />
+                                <Text
+                                    numberOfLines={1}
+                                    style={{
+                                        flex: 1,
+                                        color: item.shootName ? '#475569' : '#cbd5e1',
+                                        fontFamily: Fonts.Medium,
+                                        fontSize: 10,
+                                        marginLeft: 4,
+                                        textTransform: 'capitalize',
+                                    }}
+                                >
+                                    {item.shootName || '-'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* SHOOT TIME */}
+                        <View style={{ flex: 1 }}>
+                            <Text
+                                style={{
+                                    color: '#9aa0a6',
+                                    fontFamily: Fonts.Regular,
+                                    fontSize: 9,
+                                }}
+                            >
+                                Shoot Time
+                            </Text>
+
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                <Icon name="clock-outline" size={11} color="#64748B" />
+                                <Text
+                                    numberOfLines={1}
+                                    style={{
+                                        flex: 1,
+                                        color: item.startTime ? '#475569' : '#cbd5e1',
+                                        fontFamily: Fonts.Medium,
+                                        fontSize: 10,
+                                        marginLeft: 4,
+                                    }}
+                                >
+                                    {item.startTime
+                                        ? `${item.startTime}${item.endTime ? ` - ${item.endTime}` : ''}`
+                                        : '-'}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
 
                 {/* DETAILS */}
                 <View
@@ -1287,7 +1366,7 @@ const PhotographerDashboard = ({ hideBack: hideBackProp }) => {
             ) : (
                 <FlatList
                     data={visibleShoots}
-                    keyExtractor={item => item.id}
+                    keyExtractor={(item, index) => `${item.id}-${item.shootId || index}`}
                     renderItem={({ item }) => <ShootCard item={item} />}
                     ListHeaderComponent={ListHeader}
                     ListEmptyComponent={EmptyBox}

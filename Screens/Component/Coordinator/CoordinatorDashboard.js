@@ -219,6 +219,138 @@ const getShootStatusStyle = status => {
     }
 };
 
+const hasShoots = item =>
+    Array.isArray(item?.shoots) && item.shoots.length > 0;
+
+// multi photographer ho to sab ke naam, warna purana single naam
+const getPhotographerText = item => {
+    const names = Array.isArray(item?.photographer_names)
+        ? item.photographer_names.filter(Boolean)
+        : [];
+    if (names.length) return names.join(', ');
+    return item?.photographer_name || 'Not Assigned';
+};
+
+const ShootsList = memo(({ shoots, max = 3, showOverdue = true }) => {
+    if (!Array.isArray(shoots) || shoots.length === 0) return null;
+
+    const visible = shoots.slice(0, max);
+    const extra = shoots.length - visible.length;
+
+    return (
+        <View style={{ marginTop: 6 }}>
+            {visible.map((s, i) => {
+                const overdue = showOverdue && !!s.is_overdue;
+                const dateColor = overdue ? '#DC2626' : '#475569';
+
+                return (
+                    <View
+                        key={String(s.shoot_id ?? i)}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            marginBottom: 4,
+                        }}
+                    >
+                        {/* Date */}
+                        <Icon name="calendar-outline" size={10} color={overdue ? '#DC2626' : '#64748b'} />
+                        <Text style={{ color: dateColor, fontFamily: Fonts.Medium, fontSize: 10, marginLeft: 4 }}>
+                            {s.event_date_label || '--'}
+                        </Text>
+
+                        {/* Time slot */}
+                        {!!s.time_slot && (
+                            <View
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: '#f1f5f9',
+                                    borderRadius: 8,
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 1,
+                                    marginLeft: 6,
+                                }}
+                            >
+                                <Icon name="clock-outline" size={9} color="#64748b" />
+                                <Text style={{ color: '#475569', fontFamily: Fonts.Regular, fontSize: 9, marginLeft: 3 }}>
+                                    {s.time_slot}
+                                </Text>
+                            </View>
+                        )}
+
+                        {/* Shoot name */}
+                        {!!s.shoot_name && (
+                            <Text
+                                numberOfLines={1}
+                                style={{ color: '#94a3b8', fontFamily: Fonts.Regular, fontSize: 9.5, marginLeft: 6, textTransform: 'capitalize' }}
+                            >
+                                • {s.shoot_name}
+                            </Text>
+                        )}
+
+                        {/* Photographer */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
+                            <Icon name="camera-outline" size={9} color={s.photographer_name ? '#64748b' : '#cbd5e1'} />
+                            <Text
+                                style={{
+                                    color: s.photographer_name ? '#475569' : '#cbd5e1',
+                                    fontFamily: Fonts.Regular,
+                                    fontSize: 9,
+                                    marginLeft: 2,
+                                    textTransform: 'capitalize',
+                                }}
+                            >
+                                {s.photographer_name || 'Not assigned'}
+                            </Text>
+                        </View>
+                    </View>
+                );
+            })}
+
+            {extra > 0 && (
+                <Text style={{ color: Colors.buttonbgcolor, fontFamily: Fonts.Bold, fontSize: 9.5 }}>
+                    +{extra} more
+                </Text>
+            )}
+        </View>
+    );
+});
+const CoordinatorRow = memo(({ name }) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+        <Text style={{ color: '#9aa0a6', fontFamily: Fonts.Regular, fontSize: 9 }}>
+            Coordinator:
+        </Text>
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: name ? '#EEF2FF' : '#F1F5F9',
+                borderRadius: 12,
+                paddingHorizontal: 7,
+                paddingVertical: 2,
+                marginLeft: 5,
+                flexShrink: 1,
+            }}
+        >
+            <Icon name="account-outline" size={10} color={name ? '#6366F1' : '#94a3b8'} />
+            <Text
+                numberOfLines={1}
+                style={{
+                    color: name ? '#4F46E5' : '#94a3b8',
+                    fontFamily: Fonts.Bold,
+                    fontSize: 9,
+                    marginLeft: 3,
+                    textTransform: 'capitalize',
+                    flexShrink: 1,
+                }}
+            >
+                {name || 'Not Assigned'}
+            </Text>
+        </View>
+    </View>
+));
+
 
 const TodayCard = memo(({ item, onOpen, onAssign }) => {
     return (
@@ -253,6 +385,9 @@ const TodayCard = memo(({ item, onOpen, onAssign }) => {
                     </TouchableOpacity>
                 </View>
             </View>
+
+            <CoordinatorRow name={item.coordinator_name} />
+            <ShootsList shoots={item.shoots} />
 
             <View style={{ flexDirection: 'row', marginTop: 7, paddingTop: 6, borderTopWidth: 0.5, borderTopColor: '#edf0f2' }}>
                 <View style={{ flex: 1 }}>
@@ -395,7 +530,7 @@ const PipelineCard = memo(({ item, navigation, showUrgency }) => {
                             '-'}
                     </Text>
 
-                    {getDisplayDate(item) !== '' && (
+                    {!hasShoots(item) && getDisplayDate(item) !== '' && (
                         <View
                             style={{
                                 flexDirection: 'row',
@@ -557,6 +692,9 @@ const PipelineCard = memo(({ item, navigation, showUrgency }) => {
                 )}
             </View>
 
+            <CoordinatorRow name={item.coordinator_name} />
+            <ShootsList shoots={item.shoots} />
+
             {/* DETAILS */}
             <View
                 style={{
@@ -649,8 +787,7 @@ const PipelineCard = memo(({ item, navigation, showUrgency }) => {
                                 textTransform: 'capitalize'
                             }}
                         >
-                            {item.photographer_name ||
-                                'Not Assigned'}
+                            {getPhotographerText(item)}
                         </Text>
                     </View>
                 </View>
@@ -789,7 +926,7 @@ const CompletedCard = memo(({ item, navigation }) => {
                             '-'}
                     </Text>
 
-                    {getDisplayDate(item) !== '' && (
+                    {!hasShoots(item) && getDisplayDate(item) !== '' && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                             <Icon name="calendar-outline" size={9} color="#94a3b8" />
                             <Text
@@ -896,6 +1033,9 @@ const CompletedCard = memo(({ item, navigation }) => {
                 })()}
             </View>
 
+            <CoordinatorRow name={item.coordinator_name} />
+            <ShootsList shoots={item.shoots} showOverdue={false} />
+
             {/* DETAILS */}
             <View
                 style={{
@@ -987,8 +1127,7 @@ const CompletedCard = memo(({ item, navigation }) => {
                                 textTransform: 'capitalize'
                             }}
                         >
-                            {item.photographer_name ||
-                                'Not Assigned'}
+                            {getPhotographerText(item)}
                         </Text>
                     </View>
                 </View>

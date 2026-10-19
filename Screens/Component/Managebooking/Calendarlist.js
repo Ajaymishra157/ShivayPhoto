@@ -5,6 +5,7 @@ import {
     StatusBar,
     SafeAreaView,
     TextInput,
+    FlatList,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -38,6 +39,98 @@ const getBookingDisplay = (client) => {
     return client?.shoot_month || '--';
 };
 
+// "2026-10-08" -> "08-10-2026"
+const fmtYMD = (s) => {
+    const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : '--';
+};
+
+// "07:00:00" -> "7:00 AM"
+const fmtTime = (t) => {
+    const m = String(t || '').match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return '';
+    let h = Number(m[1]);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${m[2]} ${ampm}`;
+};
+
+const isPastYMD = (s) => {
+    const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return false;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    return d < t;
+};
+
+const ShootsBlock = ({ shoots, max = 3, showDate = true }) => {
+    const [expanded, setExpanded] = useState(false);
+    if (!Array.isArray(shoots) || shoots.length === 0) return null;
+
+    const visible = expanded ? shoots : shoots.slice(0, max);
+    const extra = shoots.length - max;
+
+    return (
+        <View style={{ paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#fff' }}>
+            <Text style={{ fontSize: 10, fontFamily: Fonts.Bold, color: '#94a3b8', marginBottom: 2 }}>
+                SHOOTS
+            </Text>
+
+            {visible.map((s, i) => {
+                const past = isPastYMD(s.date);
+                const pname = s.photographer || s.photographer_name || '';
+                const time = s.start_time
+                    ? `${fmtTime(s.start_time)}${s.end_time ? ' - ' + fmtTime(s.end_time) : ''}`
+                    : '';
+
+                return (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+                        {/* 🆕 Shoot date — sirf entry date mode me */}
+                        {showDate && (
+                            <>
+                                <Icon name="calendar-outline" size={11} color={past ? '#DC2626' : '#6366F1'} />
+                                <Text style={{ fontSize: 10.5, fontFamily: Fonts.Bold, color: past ? '#DC2626' : '#475569', marginLeft: 4 }}>
+                                    {fmtYMD(s.date)}
+                                </Text>
+                            </>
+                        )}
+
+                        {!!time && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginLeft: showDate ? 6 : 0 }}>
+                                <Icon name="clock-outline" size={10} color="#64748B" />
+                                <Text style={{ fontSize: 9.5, fontFamily: Fonts.Regular, color: '#475569', marginLeft: 3 }}>{time}</Text>
+                            </View>
+                        )}
+
+                        {!!s.name && (
+                            <Text numberOfLines={1} style={{ fontSize: 10, fontFamily: Fonts.Regular, color: '#94A3B8', marginLeft: (showDate || !!time) ? 6 : 0, textTransform: 'capitalize' }}>
+                                {(showDate || !!time) ? '• ' : ''}{s.name}
+                            </Text>
+                        )}
+
+                        {!!pname && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
+                                <Icon name="camera-outline" size={10} color="#8B5CF6" />
+                                <Text style={{ fontSize: 9.5, fontFamily: Fonts.Regular, color: '#475569', marginLeft: 3, textTransform: 'capitalize' }}>
+                                    {pname}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                );
+            })}
+
+            {extra > 0 && (
+                <TouchableOpacity onPress={() => setExpanded(p => !p)} activeOpacity={0.7} style={{ marginTop: 5 }}>
+                    <Text style={{ fontSize: 10, fontFamily: Fonts.Bold, color: Colors.buttonbgcolor }}>
+                        {expanded ? 'Show less' : `+${extra} more`}
+                    </Text>
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+};
 
 const toApiDate = (d) => {
     if (!d) return '';
@@ -403,6 +496,13 @@ const Calendarlist = ({ navigation }) => {
     };
 
     const isAdmin = userType === 'Admin';
+    const canEditClient = (client) => {
+        if (userType === 'Admin') return true;
+        if (userType === 'Sales-Person') {
+            return String(client?.added_by) === String(userId);   // sirf apni booking
+        }
+        return false;   // Photographer ya jab tak userType load nahi hua
+    };
 
     const getCounts = (day) => {
         const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -491,20 +591,22 @@ const Calendarlist = ({ navigation }) => {
                     </Text>
 
                     {/* 🆕 EDIT ICON */}
-                    <TouchableOpacity
-                        onPress={() => {
-                            setDetailModal(false);
-                            navigation.navigate('AddBooking', { clientdata: client });
-                        }}
-                        style={{
-                            width: 24, height: 24, borderRadius: 6,
-                            backgroundColor: 'rgba(255,255,255,0.25)',
-                            justifyContent: 'center', alignItems: 'center',
-                        }}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                        <Icon name="pencil" size={13} color="#fff" />
-                    </TouchableOpacity>
+                    {canEditClient(client) && (
+                        <TouchableOpacity
+                            onPress={() => {
+                                setDetailModal(false);
+                                navigation.navigate('AddBooking', { clientdata: client });
+                            }}
+                            style={{
+                                width: 24, height: 24, borderRadius: 6,
+                                backgroundColor: 'rgba(255,255,255,0.25)',
+                                justifyContent: 'center', alignItems: 'center',
+                            }}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                            <Icon name="pencil" size={13} color="#fff" />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* ── 2-col Grid ── */}
@@ -538,6 +640,10 @@ const Calendarlist = ({ navigation }) => {
                             {row.length === 1 && <View style={{ flex: 1 }} />}
                         </View>
                     ))}
+                    <ShootsBlock
+                        shoots={client.shoots}
+                        showDate={showBothDates || dateType === 'entry date'}
+                    />
                 </View>
 
                 {/* ── Tentative Action — same card ka hissa ── */}
@@ -1325,37 +1431,58 @@ const Calendarlist = ({ navigation }) => {
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView
-                            style={{ flex: 1 }}
-                            showsVerticalScrollIndicator={true}
-                            keyboardShouldPersistTaps="handled"
-                            contentContainerStyle={{ padding: 12, paddingBottom: 20 }}
-                        >
-                            {detailClients.length === 0 ? (
-                                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 50 }}>
+                        <FlatList
+                            data={detailClients}
+                            keyExtractor={(c) => String(c.client_id)}
+                            renderItem={({ item, index }) => (
+                                <ClientCard
+                                    client={item}
+                                    idx={index}
+                                    total={detailClients.length}
+                                    isTentativeModal={isTentativeModal}
+                                    handleUpdateDate={handleUpdateDate}
+                                    updateLoading={updateLoading}
+                                    formatDateTime={formatDateTime}
+                                />
+                            )}
+                            contentContainerStyle={{
+                                padding: 12,
+                                paddingBottom: 20,
+                                flexGrow: 1,        // 👈 IMPORTANT — empty state ko center karne ke liye
+                            }}
+                            initialNumToRender={5}
+                            maxToRenderPerBatch={5}
+                            windowSize={5}
+                            removeClippedSubviews={true}
+
+                            // 👇 YAHAN ADD KARO
+                            ListEmptyComponent={
+                                <View style={{
+                                    flex: 1,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    paddingVertical: 50,
+                                }}>
                                     <Icon name="clipboard-check-outline" size={48} color="#cbd5e1" />
-                                    <Text style={{ marginTop: 12, fontSize: 14, fontFamily: Fonts.Bold, color: '#94a3b8' }}>
+                                    <Text style={{
+                                        marginTop: 12,
+                                        fontSize: 14,
+                                        fontFamily: Fonts.Bold,
+                                        color: '#94a3b8',
+                                    }}>
                                         No Bookings Found
                                     </Text>
-                                    <Text style={{ marginTop: 4, fontSize: 12, fontFamily: Fonts.Regular, color: '#cbd5e1' }}>
+                                    <Text style={{
+                                        marginTop: 4,
+                                        fontSize: 12,
+                                        fontFamily: Fonts.Regular,
+                                        color: '#cbd5e1',
+                                    }}>
                                         All records have been updated
                                     </Text>
                                 </View>
-                            ) : (
-                                detailClients.map((client, idx) => (
-                                    <ClientCard
-                                        key={client.client_id}
-                                        client={client}
-                                        idx={idx}
-                                        total={detailClients.length}
-                                        isTentativeModal={isTentativeModal}
-                                        handleUpdateDate={handleUpdateDate}
-                                        updateLoading={updateLoading}
-                                        formatDateTime={formatDateTime}
-                                    />
-                                ))
-                            )}
-                        </ScrollView>
+                            }
+                        />
 
                     </View>
                 </View>
@@ -1409,44 +1536,50 @@ const Calendarlist = ({ navigation }) => {
                         {salesLoading ? (
                             <ActivityIndicator size="small" color={Colors.buttonbgcolor} style={{ marginVertical: 20 }} />
                         ) : (
-                            <ScrollView>
-                                {salesPersonList
-                                    .filter(item => item.label?.toLowerCase().includes(salesSearch.toLowerCase()))
-                                    .map(item => {
-                                        const sel = item.value === selectedSalesPerson;
-                                        return (
-                                            <TouchableOpacity
-                                                key={item.value || 'all'}
-                                                onPress={() => {
-                                                    setSelectedSalesPerson(item.value);
-                                                    setSalesModal(false);
-                                                    setSalesSearch('');
-                                                }}
-                                                style={{
-                                                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                                                    paddingHorizontal: 16, paddingVertical: 13,
-                                                    borderBottomWidth: 0.5, borderBottomColor: '#f1f5f9',
-                                                    backgroundColor: sel ? '#f0fdf4' : '#fff',
-                                                }}
-                                            >
-                                                <Text style={{
-                                                    fontSize: 14,
-                                                    fontFamily: sel ? Fonts.Bold : Fonts.Regular,
-                                                    color: sel ? Colors.buttonbgcolor : '#1e293b',
-                                                }}>
-                                                    {item.label}
-                                                </Text>
-                                                {sel && <Icon name="check" size={16} color={Colors.buttonbgcolor} />}
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-
-                                {salesPersonList.filter(item => item.label?.toLowerCase().includes(salesSearch.toLowerCase())).length === 0 && (
+                            <FlatList
+                                style={{ flex: 1 }}
+                                data={salesPersonList.filter(s =>
+                                    s.label?.toLowerCase().includes(salesSearch.toLowerCase())
+                                )}
+                                keyExtractor={(item, i) => String(item.value || `all-${i}`)}
+                                keyboardShouldPersistTaps="handled"
+                                renderItem={({ item }) => {
+                                    const sel = item.value === selectedSalesPerson;
+                                    return (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setSelectedSalesPerson(item.value);
+                                                setSalesModal(false);
+                                                setSalesSearch('');
+                                            }}
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                paddingHorizontal: 16,
+                                                paddingVertical: 13,
+                                                borderBottomWidth: 0.5,
+                                                borderBottomColor: '#f1f5f9',
+                                                backgroundColor: sel ? '#f0fdf4' : '#fff',
+                                            }}
+                                        >
+                                            <Text style={{
+                                                fontSize: 14,
+                                                fontFamily: sel ? Fonts.Bold : Fonts.Regular,
+                                                color: sel ? Colors.buttonbgcolor : '#1e293b',
+                                            }}>
+                                                {item.label}
+                                            </Text>
+                                            {sel && <Icon name="check" size={16} color={Colors.buttonbgcolor} />}
+                                        </TouchableOpacity>
+                                    );
+                                }}
+                                ListEmptyComponent={
                                     <Text style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, fontFamily: Fonts.Regular, paddingVertical: 20 }}>
                                         No sales person found
                                     </Text>
-                                )}
-                            </ScrollView>
+                                }
+                            />
                         )}
                     </View>
                 </View>
